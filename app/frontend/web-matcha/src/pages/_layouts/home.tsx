@@ -3,12 +3,14 @@ import { Outlet } from 'react-router'
 
 export function HomeLayout() {
 	return (
-		<div className="flex min-h-screen flex-col antialiased">
+		<div className="flex max-h-lvh min-h-screen max-w-lvw flex-col antialiased">
 			<Header />
-			<div className="flex flex-1 flex-col gap-4 p-8 pt-8">
+			<main className="h-lvh w-lvw">
 				<Outlet />
-			</div>
-			<p>footer</p>
+			</main>
+			<footer className="font-markazi text-foreground fixed bottom-0 mb-2 self-center">
+				Copyright &copy; {new Date().getFullYear()}
+			</footer>
 		</div>
 	)
 }
