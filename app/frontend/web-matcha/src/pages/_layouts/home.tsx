@@ -3,7 +3,7 @@ import { Outlet } from 'react-router'
 
 export function HomeLayout() {
 	return (
-		<div className="flex max-h-lvh min-h-screen max-w-lvw flex-col antialiased">
+		<div className="flex max-h-lvh max-w-lvw flex-col antialiased">
 			<Header />
 			<main className="h-lvh w-lvw">
 				<Outlet />
