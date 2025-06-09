@@ -6,7 +6,7 @@ import { useState } from 'react'
 
 export function ThemeToggle() {
 	const { setTheme } = useTheme()
-	const [themeState, setThemeState] = useState('')
+	const [themeState, setThemeState] = useState(localStorage.getItem('matcha-theme') || '')
 
 	function handleTheme() {
 		if (themeState === 'light') {

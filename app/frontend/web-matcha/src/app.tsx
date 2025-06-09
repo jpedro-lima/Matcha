@@ -6,7 +6,7 @@ import { Toaster } from 'sonner'
 
 function App() {
 	return (
-		<ThemeProvider defaultTheme="dark" storageKey="matcha-theme">
+		<ThemeProvider defaultTheme="system" storageKey="matcha-theme">
 			<Toaster richColors />
 			<BrowserRouter>
 				<Router />

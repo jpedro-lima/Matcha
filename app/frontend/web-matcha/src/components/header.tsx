@@ -26,7 +26,7 @@ export function Header() {
 					</Link>
 				</div>
 			</div>
-			<div className="w-[98%] border border-b-red-700" />
+			<div className="mx-auto w-[98%] border border-b-red-700" />
 		</div>
 	)
 }
