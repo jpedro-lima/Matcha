@@ -7,16 +7,16 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { PasswordValidationTooltip } from './password-validation-tooltip'
 import googleLogo from '@/assets/google-logo.svg'
-import matchaLogo from '@/assets/matcha-logo.svg'
 
 const registerSchema = z.object({
+	username: z.string().nonempty('Please enter your username'),
 	firstName: z.string().nonempty('Please enter your first name'),
 	lastName: z.string().nonempty('Please enter your last name'),
 	email: z.string().email(),
 	password: z
 		.string()
 		.regex(
-			new RegExp('^(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9])(?=.*[!@#$%^&*])'),
+			new RegExp('^(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9])(?=.*[!@#$%^&*{}])'),
 			'Password invalid, please use a stronger one',
 		),
 	validatePassword: z.string(),
@@ -49,22 +49,14 @@ export function Register() {
 
 	return (
 		<div className="grid h-full w-full md:grid-cols-2">
-			<section className="">
-				<div className="absolute bottom-0 h-[360px] w-[400px] overflow-hidden">
-					<div className="relative">
-						<img
-							src={matchaLogo}
-							className="relative bottom-[-24.5%] left-[-25%] size-[400px] scale-200 opacity-20"
-						/>
-					</div>
-				</div>
-			</section>
+			<section className=""></section>
 
 			<main className="md:bg-muted flex">
 				<div className="mx-auto h-[30rem] w-80 md:my-auto md:ml-22 md:w-96">
 					<form onSubmit={handleSubmit(handleRegister)} className="flex flex-col gap-1.5">
 						<Input type="text" {...register('firstName')} placeholder="First Name" />
 						<Input type="text" {...register('lastName')} placeholder="Last Name" />
+						<Input type="text" {...register('username')} placeholder="Username" />
 						<Input type="email" placeholder="E-mail" {...register('email')} />
 						<Tooltip>
 							<TooltipContent
@@ -87,7 +79,7 @@ export function Register() {
 							type="submit"
 							disabled={isSubmitting}
 							onClick={checkErrorsForm}
-							className="mt-6 w-full"
+							className="mt-6"
 						>
 							Register
 						</Button>

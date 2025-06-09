@@ -9,7 +9,7 @@ export function PasswordValidationTooltip({ password }: PasswordValidationToolti
 		{ pattern: '^(?=.*[a-z])', text: 'Contains lowercase letter' },
 		{ pattern: '^(?=.*[A-Z])', text: 'Contains uppercase letter' },
 		{ pattern: '^(?=.*[0-9])', text: 'Contains number' },
-		{ pattern: '^(?=.*[!@#$%^&*])', text: 'contains special character' },
+		{ pattern: '^(?=.*[!@#$%^&*{}])', text: 'contains special character' },
 	]
 
 	return (
