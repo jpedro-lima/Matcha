@@ -1,35 +1,53 @@
 import { Card, CardContent } from '@/components/ui/card'
 import type { CardData } from './notifications'
-// import { useState } from 'react'
-// import { CheckCheck } from 'lucide-react'
+import { useState } from 'react'
+import { TitleWithEllipsis } from './title-with-ellipsis'
+import { Timestamp } from './timestamp'
 
 interface NotificationsCardType extends CardData {
 	handleActiveCard: () => void
+	timeZone: string
 }
 
 export function NotificationsCard({
 	title,
 	content,
+	timestamp,
 	handleActiveCard,
+	timeZone,
 }: NotificationsCardType) {
-	// const [viewed, setViewed] = useState<boolean>(false)
+	const [active, setActive] = useState<boolean>(false)
 
-	// function handleClick() {
-	// 	handleActiveCard()
-	// 	setViewed(true)
-	// }
+	function handleClick() {
+		handleActiveCard()
+		if (active) setActive(false)
+		else setActive(true)
+	}
 
 	return (
-		<Card onClick={handleActiveCard}>
+		<Card onClick={handleClick}>
 			<CardContent className="break-all">
-				<header className="font-markazi flex justify-between">
-					{/* <div className="flex"> */}
-					<p className="mr-1 text-xl font-bold">{title}</p>
-					{/* {viewed ? <CheckCheck className="text-primary" size={18} /> : ''} */}
-					{/* </div> */}
-					<span>08:34</span>
+				<header className="font-markazi">
+					<div className="flex justify-between sm:hidden">
+						<TitleWithEllipsis title={title} maxLength={28} isActive={active} />
+						<Timestamp
+							timestamp={timestamp}
+							timeZone={timeZone}
+							showFull={!active || title.length < 28}
+						/>
+					</div>
+					<div className="hidden justify-between sm:flex">
+						<TitleWithEllipsis title={title} maxLength={55} isActive={false} />
+						<Timestamp timestamp={timestamp} timeZone={timeZone} showFull={true} />
+					</div>
 				</header>
-				<section className="text-sm">
+
+				<section className="text-sm sm:hidden">
+					{!active && content.length > 70
+						? content.substring(0, 67).concat('...')
+						: content}
+				</section>
+				<section className="hidden sm:inline">
 					{content.length > 70 ? content.substring(0, 67).concat('...') : content}
 				</section>
 			</CardContent>
