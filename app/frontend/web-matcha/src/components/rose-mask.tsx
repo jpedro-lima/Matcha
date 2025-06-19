@@ -2,7 +2,7 @@ import matchaLogo from '@/assets/matcha-logo.svg'
 
 export function RoseMask() {
 	return (
-		<div className="absolute bottom-0 z-[-1] size-[380px] overflow-hidden">
+		<div className="absolute bottom-0 z-[-1] size-[360px] overflow-hidden">
 			<div className="size-full">
 				<img
 					src={matchaLogo}

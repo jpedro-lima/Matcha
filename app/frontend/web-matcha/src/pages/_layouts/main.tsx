@@ -14,12 +14,12 @@ import { RoseMask } from '@/components/rose-mask'
 
 export function MainLayout() {
 	return (
-		<div className="max-h-lvh max-w-lvw antialiased">
+		<div className="h-lvh w-lvw antialiased">
 			<header className="flex w-full">
 				<img
 					src={matchaLogo}
 					alt="rose"
-					className="mx-auto mt-[-15px] mb-[-5px] size-22"
+					className="mx-auto mt-[-15px] mb-[-10px] size-22"
 				/>
 
 				<div className="absolute right-0 m-4 flex items-center gap-2">
@@ -29,13 +29,13 @@ export function MainLayout() {
 					</Button>
 				</div>
 			</header>
-			<div className="flex h-[calc(100lvh-4.3rem)] w-lvw flex-col md:flex-row">
-				<main className="h-[calc(100%-3rem)] w-full md:h-full">
+
+			<section className="flex h-[calc(100%-4.2rem)] w-full flex-col sm:flex-row">
+				<main className="relative h-[calc(100%-3rem)] w-full overflow-scroll sm:h-full">
 					<Outlet />
-					<RoseMask />
 				</main>
 
-				<nav className="text-muted-foreground flex h-12 items-center justify-center gap-5 md:h-full md:w-15 md:flex-col md:justify-end md:gap-3 md:pb-3">
+				<nav className="text-muted-foreground absolute bottom-0 flex h-12 items-center gap-5 self-center sm:relative sm:h-full sm:w-15 sm:flex-col sm:justify-end sm:gap-3">
 					<NavLink
 						to="/notifications"
 						className={({ isActive }) => (isActive ? 'text-rose-700' : '')}
@@ -64,7 +64,8 @@ export function MainLayout() {
 						<CircleUserRound size={30} />
 					</NavLink>
 				</nav>
-			</div>
+			</section>
+			<RoseMask />
 		</div>
 	)
 }
