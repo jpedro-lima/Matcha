@@ -6,6 +6,7 @@ import { SignIn } from './pages/auth/sign-in'
 import { MainLayout } from './pages/_layouts/main'
 import { Notifications } from './pages/notifications/notifications'
 import { Profile } from './pages/profile/profile'
+import { Main } from './pages/main/form-teste'
 
 export function Router() {
 	return (
@@ -19,7 +20,7 @@ export function Router() {
 			<Route element={<MainLayout />}>
 				<Route path="/notifications" element={<Notifications />} />
 				<Route path="/profile" element={<Profile />} />
-				<Route path="/main" element={<p>Perfil</p>} />
+				<Route path="/main" element={<Main />} />
 				<Route path="/chat" element={<p>Perfil</p>} />
 			</Route>
 

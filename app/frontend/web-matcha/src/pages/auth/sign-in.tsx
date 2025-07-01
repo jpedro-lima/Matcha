@@ -41,7 +41,7 @@ export function SignIn() {
 				<div className="mx-auto h-[30rem] w-80 md:my-auto md:ml-22 md:w-96">
 					<form onSubmit={handleSubmit(handleRegister)} className="flex flex-col">
 						<Input type="text" placeholder="Username" {...register('email')} />
-						<Input type="password" {...register('password')} placeholder="Password" />
+						<Input type="password" placeholder="Password" {...register('password')} />
 						<ResetPassword />
 
 						<Button
