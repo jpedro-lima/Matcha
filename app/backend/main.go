@@ -22,7 +22,9 @@ func main() {
 
     r.Post("/register", handlers.Register)
     r.Post("/login", handlers.Login)
-
+	r.Post("/profiles", handlers.CreateProfile)
+    r.Put("/profiles/{id}", handlers.UpdateProfile)
+    r.Delete("/profiles/{id}", handlers.DeleteProfile)
     log.Println("Server running on :8080")
     http.ListenAndServe(":8080", r)
 }
