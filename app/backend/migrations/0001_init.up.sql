@@ -8,7 +8,10 @@ CREATE TABLE IF NOT EXISTS users (
     email VARCHAR(255) NOT NULL UNIQUE,
     password VARCHAR(255) NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+	confirmed BOOLEAN DEFAULT false,
+	confirmation_token TEXT,
+	confirmation_expires_at TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS profiles (
@@ -23,7 +26,7 @@ CREATE TABLE IF NOT EXISTS profiles (
     tags VARCHAR(50)[],
     attributes JSONB DEFAULT '[]',
     looking_for JSONB DEFAULT '[]',
-	profile_photos JSONB DEFAULT '[]';
+	profile_photos JSONB DEFAULT '[]',
     last_active TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()

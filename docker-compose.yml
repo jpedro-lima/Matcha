@@ -15,7 +15,7 @@ services:
       - DB_NAME=postgres
 
   db:
-    image: postgres
+    image: postgis/postgis:15-3.3
     environment:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=mysecretpassword

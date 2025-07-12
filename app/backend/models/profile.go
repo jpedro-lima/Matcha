@@ -9,8 +9,6 @@ type Profile struct {
     BirthDate       string   `db:"birth_date" json:"birth_date"`
     SearchRadius    int      `db:"search_radius" json:"search_radius"`
     Tags            []string `db:"tags" json:"tags"`
-
-    // Geography point might be best stored as raw string or custom struct
     Location        string                 `db:"location" json:"location"` // optional: use geo type
     Attributes      map[string]interface{} `db:"attributes" json:"attributes"`
     LookingFor      map[string]interface{} `db:"looking_for" json:"looking_for"`
