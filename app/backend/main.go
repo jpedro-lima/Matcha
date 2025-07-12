@@ -22,7 +22,7 @@ func main() {
 
     r.Post("/register", handlers.Register)
     r.Post("/login", handlers.Login)
-	r.Post("/logout", handlers.Logout)
+	r.Patch("/logout", handlers.Logout)
 	r.Post("/profiles", handlers.CreateProfile)
 	r.Patch("/update_password", handlers.UpdatePassword)
     r.Put("/profiles/{id}", handlers.UpdateProfile)
