@@ -4,7 +4,7 @@ import (
     "errors"
     "net/http"
     "strings"
-    "time"
+	"time"
     "github.com/golang-jwt/jwt/v5"
 )
 
@@ -20,6 +20,7 @@ func GenerateJWT(userID int) (string, error) {
     return token.SignedString(jwtKey)
 }
 
+// Extract user_id from JWT in Authorization header
 func GetUserIDFromRequest(r *http.Request) (int, error) {
     authHeader := r.Header.Get("Authorization")
     if authHeader == "" {

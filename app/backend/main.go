@@ -29,5 +29,5 @@ func main() {
     r.Delete("/profiles/{id}", handlers.DeleteProfile)
 	r.Get("/confirm", handlers.ConfirmEmail)
     log.Println("Server running on :8080")
-    http.ListenAndServe(":8080", r)
+	http.ListenAndServe(":8080", r)
 }
