@@ -28,7 +28,6 @@ func CreateProfile(w http.ResponseWriter, r *http.Request) {
 
     profile.UserID = userID
 
-    // ✅ Marshal JSONB fields
     attributesJSON, err := json.Marshal(profile.Attributes)
     if err != nil {
         http.Error(w, "Failed to serialize attributes", http.StatusBadRequest)
@@ -47,7 +46,6 @@ func CreateProfile(w http.ResponseWriter, r *http.Request) {
         return
     }
 
-    // INSERT with properly marshaled JSONB
     query := `
         INSERT INTO profiles (
             user_id, bio, gender, preferred_gender, birth_date,
