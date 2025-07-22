@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Chat</title>
+  <style>
+    body { font-family: sans-serif; margin: 20px; }
+    #messages { border: 1px solid #ccc; padding: 10px; height: 300px; overflow-y: auto; margin-bottom: 10px; }
+    input[type="text"] { width: 80%; padding: 8px; }
+    button { padding: 8px 12px; }
+  </style>
+</head>
+<body>
+  <h2>Simple Chat</h2>
+  <div>
+    <label for="match">Match ID:</label>
+    <input type="number" id="match" value="1" />
+    <label for="sender">Sender ID:</label>
+    <input type="number" id="sender" value="1" />
+    <button onclick="connect()">Connect</button>
+  </div>
+
+  <div id="messages"></div>
+
+  <input type="text" id="messageInput" placeholder="Type a message..." />
+  <button onclick="sendMessage()">Send</button>
+
+  <script>
+    let socket;
+    const messagesDiv = document.getElementById("messages");
+
+    function connect() {
+      const matchID = document.getElementById("match").value;
+      socket = new WebSocket(`ws://${location.host}/ws?match_id=${matchID}`);
+
+      socket.onmessage = event => {
+        const msg = JSON.parse(event.data);
+        const line = document.createElement("div");
+        line.textContent = `From ${msg.sender_id}: ${msg.content}`;
+        messagesDiv.appendChild(line);
+        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+      };
+
+      socket.onclose = () => {
+        console.log("Disconnected");
+      };
+    }
+
+    function sendMessage() {
+      const content = document.getElementById("messageInput").value;
+      const senderID = Number(document.getElementById("sender").value);
+      const matchID = Number(document.getElementById("match").value);
+
+      const payload = {
+        match_id: matchID,
+        sender_id: senderID,
+        content: content
+      };
+
+      socket.send(JSON.stringify(payload));
+      document.getElementById("messageInput").value = "";
+    }
+  </script>
+</body>
+</html>

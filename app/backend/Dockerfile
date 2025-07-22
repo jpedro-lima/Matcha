@@ -24,7 +24,7 @@ RUN curl -L https://github.com/golang-migrate/migrate/releases/download/v4.16.2/
 
 COPY --from=builder /app/main .
 COPY --from=builder /app/migrations ./migrations
-
+COPY --from=builder /app/chat.html chat.html
 # Expose app port
 EXPOSE 8080
 

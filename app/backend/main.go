@@ -28,6 +28,12 @@ func main() {
     r.Put("/profiles/{id}", handlers.UpdateProfile)
     r.Delete("/profiles/{id}", handlers.DeleteProfile)
 	r.Get("/confirm", handlers.ConfirmEmail)
-    log.Println("Server running on :8080")
+	r.Get("/chat", func(w http.ResponseWriter, r *http.Request) {
+    http.ServeFile(w, r, "chat.html")
+})
+	r.Get("/ws", func(w http.ResponseWriter, r *http.Request) {
+    handlers.ChatHandler(w, r)
+})
+	log.Println("Server running on :8080")
 	http.ListenAndServe(":8080", r)
 }
