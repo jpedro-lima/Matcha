@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"encoding/json"
-	"log"
 	"math/rand"
 	"net/http"
 	"time"
@@ -14,10 +13,10 @@ import (
 
 // SuggestedProfile represents the lightweight view returned to frontend
 type SuggestedProfile struct {
-    ID           int      `json:"id"`
-    Bio          string   `json:"bio"`
-    Gender       string   `json:"gender"`
-    ProfilePhotos []string `json:"profile_photos"`
+    ID           int    `json:"id" db:"id"`
+    Bio          string `json:"bio" db:"bio"`
+    Gender       string `json:"gender" db:"gender"`
+    ProfilePhoto string `json:"profile_photos" db:"first_photo"`
 }
 
 func GetSuggestedProfile(w http.ResponseWriter, r *http.Request) {
@@ -29,12 +28,12 @@ func GetSuggestedProfile(w http.ResponseWriter, r *http.Request) {
 
     // Get current user's profile
     var userProfile struct {
-        Gender          string
-        PreferredGender []string
-        BirthDate       time.Time
-        Location        string // WKT point string
-        SearchRadius    int
-    }
+    Gender          string         `db:"gender"`
+    PreferredGender pq.StringArray `db:"preferred_gender"`
+    BirthDate       time.Time      `db:"birth_date"`
+    Location        string         `db:"location"`
+    SearchRadius    int            `db:"search_radius"`
+}
     err = config.DB.Get(&userProfile, `
         SELECT gender, preferred_gender, birth_date,
                ST_AsText(location) AS location, search_radius
@@ -42,14 +41,13 @@ func GetSuggestedProfile(w http.ResponseWriter, r *http.Request) {
         WHERE user_id = $1
     `, userID)
     if err != nil {
-    log.Printf("DB error fetching profile: %v", err)
-    http.Error(w, "Profile not found", http.StatusNotFound)
-    return
-}
+        http.Error(w, "Profile not found", http.StatusNotFound)
+        return
+    }
 
     // Calculate acceptable age range (example: 25–35)
     minAge := 25
-    maxAge := 35
+    maxAge := 135
     today := time.Now()
     minBirth := today.AddDate(-maxAge, 0, 0)
     maxBirth := today.AddDate(-minAge, 0, 0)
