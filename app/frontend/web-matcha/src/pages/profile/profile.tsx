@@ -14,7 +14,7 @@ export function Profile() {
 
 	return (
 		<main className="grid h-full w-full md:grid-cols-2">
-			<section className="order-1 mt-2.5 sm:order-0">
+			<section className="order-1 mt-2.5 self-center sm:order-0">
 				<CarouselForm />
 			</section>
 

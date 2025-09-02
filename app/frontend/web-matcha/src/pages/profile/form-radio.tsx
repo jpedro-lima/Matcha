@@ -33,18 +33,6 @@ export function FormRadio({ options, control }: FormRadioType) {
 					</RadioGroup>
 				)}
 			/>
-			{/* <RadioGroup className="ml-2 flex gap-4">
-				{options.map((item) => {
-					return (
-						<div className="flex items-center gap-2" key={item}>
-							<RadioGroupItem id={item} value={item} className="bg-background" />
-							<Label htmlFor={item} className="font-markazi text-xl capitalize">
-								{item}
-							</Label>
-						</div>
-					)
-				})}
-			</RadioGroup> */}
 		</div>
 	)
 }

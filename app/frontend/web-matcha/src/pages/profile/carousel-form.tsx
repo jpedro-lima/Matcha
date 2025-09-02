@@ -12,12 +12,12 @@ import photo from '@/_images/horizontal-photo.webp'
 import woman from '@/_images/woman-peb.jpg'
 
 const images = [
-	{ url: pretty, size: 'sm:h-[625px]' },
+	{ url: pretty, size: 'sm:h-[500px]' },
 	{ url: photo, size: '' },
-	{ url: woman, size: 'sm:h-[625px]' },
-	{ url: pretty, size: 'sm:h-[625px]' },
+	{ url: woman, size: 'sm:h-[500px]' },
+	{ url: pretty, size: 'sm:h-[500px]' },
 	{ url: photo, size: '' },
-	{ url: woman, size: 'sm:h-[625px]' },
+	{ url: woman, size: 'sm:h-[500px]' },
 ]
 
 const formImagesInputSchema = z.object({
