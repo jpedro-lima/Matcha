@@ -1,6 +1,6 @@
 import { Checkbox } from '@/components/ui/checkbox'
 import { Controller, type Control } from 'react-hook-form'
-import type { FormValues } from './form-teste'
+import type { FormValues } from './main'
 
 interface CheckboxFormProps {
 	name: string

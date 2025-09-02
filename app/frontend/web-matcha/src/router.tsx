@@ -6,7 +6,7 @@ import { SignIn } from './pages/auth/sign-in'
 import { MainLayout } from './pages/_layouts/main'
 import { Notifications } from './pages/notifications/notifications'
 import { Profile } from './pages/profile/profile'
-import { Main } from './pages/main/form-teste'
+import { Main } from './pages/main/main'
 
 export function Router() {
 	return (

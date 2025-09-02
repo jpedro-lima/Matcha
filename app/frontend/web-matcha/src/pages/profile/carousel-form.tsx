@@ -1,64 +1,95 @@
 import { Button } from '@/components/ui/button'
-import { Card, CardContent } from '@/components/ui/card'
-import {
-	Carousel,
-	CarouselContent,
-	CarouselItem,
-	CarouselNext,
-	CarouselPrevious,
-} from '@/components/ui/carousel'
 import { Input } from '@/components/ui/input'
 import { Upload } from 'lucide-react'
+import { toast } from 'sonner'
+import { z } from 'zod'
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { CarouselImages } from '@/components/carousel-images'
 
 import pretty from '@/_images/pretty-woman.jpg'
 import photo from '@/_images/horizontal-photo.webp'
 import woman from '@/_images/woman-peb.jpg'
 
+const images = [
+	{ url: pretty, size: 'sm:h-[625px]' },
+	{ url: photo, size: '' },
+	{ url: woman, size: 'sm:h-[625px]' },
+	{ url: pretty, size: 'sm:h-[625px]' },
+	{ url: photo, size: '' },
+	{ url: woman, size: 'sm:h-[625px]' },
+]
+
+const formImagesInputSchema = z.object({
+	images: z
+		.custom<FileList>()
+		.refine((files) => files?.length > 0, 'Selecione pelo menos uma imagem')
+		.refine((files) => files?.length <= 5, 'Máximo de 5 imagens permitidas')
+		.refine((files) => Array.from(files).every((file) => file.type.startsWith('image/'))),
+})
+
+type FormImagesInput = z.infer<typeof formImagesInputSchema>
+
 export function CarouselForm() {
+	const {
+		handleSubmit,
+		reset,
+		watch,
+		register,
+		formState: { isSubmitting, errors },
+	} = useForm<FormImagesInput>({
+		resolver: zodResolver(formImagesInputSchema),
+		defaultValues: {
+			images: undefined,
+		},
+	})
+
+	const selectedFiles = watch('images')
+
+	async function onSubmit(values: FormImagesInput) {
+		try {
+			const formData = new FormData()
+			Array.from(values.images).forEach((file) => {
+				formData.append('images', file)
+			})
+
+			// Simulação de upload (substituir por API)
+			await new Promise((resolve) => setTimeout(resolve, 1500))
+
+			toast.success('Upload complete!', {
+				description: `${values.images.length} image(s) successfully sent.`,
+			})
+			reset()
+		} catch {
+			console.error(errors.images?.message)
+			toast.error('Upload Error', {
+				description: 'An error occurred while sending the images.',
+			})
+		}
+		console.log(selectedFiles)
+	}
+
 	return (
-		<main className="mt-5">
-			<div>
-				<Carousel className="m-5 sm:ml-20">
-					<CarouselPrevious className="hidden sm:flex" />
+		<section className="mt-5">
+			<CarouselImages images={images} />
 
-					<CarouselContent className="h-[445px] cursor-grab active:cursor-grabbing sm:h-[700px]">
-						{Array.from({ length: 4 }).map((_, index) => (
-							<CarouselItem key={index}>
-								<Card className="bg-muted m-0 flex h-full items-center justify-center p-0">
-									<CardContent>
-										{index % 2 ? (
-											<img src={pretty} className="rounded-md sm:h-[625px]" />
-										) : (
-											<img src={photo} className="rounded-md" />
-										)}
-									</CardContent>
-								</Card>
-							</CarouselItem>
-						))}
-						<CarouselItem>
-							<Card className="bg-muted flex h-full items-center justify-center">
-								<CardContent>
-									<img src={woman} className="rounded-md sm:h-[625px]" />
-								</CardContent>
-							</Card>
-						</CarouselItem>
-					</CarouselContent>
-
-					<CarouselNext className="hidden sm:flex" />
-				</Carousel>
-			</div>
-			<div className="mx-auto mt-5 flex w-8/12 gap-1">
+			<form
+				action=""
+				onSubmit={handleSubmit(onSubmit)}
+				className="mx-auto mt-5 flex w-8/12 gap-1"
+			>
 				<Input
 					className="cursor-pointer rounded-l-md border border-rose-700"
-					id="picture"
 					type="file"
-					placeholder="teste"
+					accept="image/*"
 					multiple
+					{...register('images')}
 				/>
-				<Button className="rounded-l-none" type="submit">
+
+				<Button className="rounded-l-none" type="submit" disabled={isSubmitting}>
 					<Upload size={32} className="size-6 text-neutral-100" />
 				</Button>
-			</div>
-		</main>
+			</form>
+		</section>
 	)
 }
