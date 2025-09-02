@@ -18,11 +18,13 @@ import { HandHeart, MapPin, Minus } from 'lucide-react'
 import pretty from '@/_images/pretty-woman.jpg'
 import photo from '@/_images/horizontal-photo.webp'
 import woman from '@/_images/woman-peb.jpg'
+import { Bio } from './bio'
+import { Tags } from './tags'
 
 const perfil = {
 	firstName: 'João Pedro',
 	lastName: 'Correia',
-	bio: 'Sou um desenvolvedor Full Stack especializado em Java com Spring Boot e React (quando não uso Vanilla JS), tenho domínio em docker e tenho experimentado o uso de Kubernetes para meus projetos de micro serviços.',
+	bio: 'Sou um desenvolvedor Full Stack Sou um desenvolvedor Full Stack especializado em Java com Spring Boot e React (quando não uso Vanilla JS), tenho domínio em docker e tenho experimentado o uso de Kubernetes para meus projetos de micro serviços.',
 	fame: 355,
 	tags: [
 		'jogos',
@@ -34,9 +36,11 @@ const perfil = {
 		'culinária',
 		'esportes',
 		'futebol',
+		'viagens',
+		'culinária',
 	],
 	images: [
-		{ url: pretty, size: 'sm:h-[625px]' },
+		{ url: pretty, size: 'sm:h-[500px]' },
 		{ url: photo, size: '' },
 		{ url: woman, size: 'sm:h-[625px]' },
 		{ url: pretty, size: 'sm:h-[625px]' },
@@ -53,12 +57,12 @@ const perfil = {
 export function Main() {
 	return (
 		<main className="grid h-full w-full md:grid-cols-2">
-			<section className="mt-5">
+			<section className="order-1 mt-2.5 self-center sm:order-0">
 				<CarouselImages images={perfil.images} />
 			</section>
 
 			<section className="sm:bg-muted mt-2.5 flex flex-col p-4 sm:ml-[4rem]">
-				<div className="flex w-82 flex-col self-center sm:my-auto sm:ml-4 sm:w-8/12 sm:self-start">
+				<div className="flex w-82 flex-col self-center sm:my-auto sm:ml-12 sm:w-8/12 sm:self-start">
 					<header className="flex flex-col items-end">
 						<h1 className="font-markazi text-muted-foreground text-3xl">{`${perfil.firstName} ${perfil.lastName} `}</h1>
 						<Minus className="my-[-15px] mr-[-5px] size-8 text-rose-700" />
@@ -75,7 +79,10 @@ export function Main() {
 						</div>
 					</header>
 
-					
+					<div className="flex flex-col gap-3">
+						<Bio text={perfil.bio} />
+						<Tags tags={perfil.tags} />
+					</div>
 				</div>
 			</section>
 		</main>
