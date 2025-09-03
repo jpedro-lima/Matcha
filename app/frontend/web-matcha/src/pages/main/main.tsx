@@ -61,7 +61,7 @@ export function Main() {
 				<CarouselImages images={perfil.images} />
 			</section>
 
-			<section className="sm:bg-muted mt-2.5 flex flex-col p-4 sm:ml-[4rem]">
+			<section className="sm:bg-muted flex flex-col p-4 sm:ml-[4rem]">
 				<div className="flex w-82 flex-col self-center sm:my-auto sm:ml-12 sm:w-8/12 sm:self-start">
 					<header className="flex flex-col items-end">
 						<h1 className="font-markazi text-muted-foreground text-3xl">{`${perfil.firstName} ${perfil.lastName} `}</h1>
