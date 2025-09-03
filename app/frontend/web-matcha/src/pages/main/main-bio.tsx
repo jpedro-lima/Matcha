@@ -2,7 +2,7 @@ type BioType = {
 	text: string
 }
 
-export function Bio({ text }: BioType) {
+export function MainBio({ text }: BioType) {
 	return (
 		<div>
 			<h3 className="font-markazi text-muted-foreground text-xl">Bio</h3>

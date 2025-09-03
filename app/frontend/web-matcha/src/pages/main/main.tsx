@@ -18,8 +18,8 @@ import { HandHeart, MapPin, Minus } from 'lucide-react'
 import pretty from '@/_images/pretty-woman.jpg'
 import photo from '@/_images/horizontal-photo.webp'
 import woman from '@/_images/woman-peb.jpg'
-import { Bio } from './bio'
-import { Tags } from './tags'
+import { MainBio } from './main-bio'
+import { MainTags } from './main-tags'
 
 const perfil = {
 	firstName: 'João Pedro',
@@ -80,8 +80,8 @@ export function Main() {
 					</header>
 
 					<div className="flex flex-col gap-3">
-						<Bio text={perfil.bio} />
-						<Tags tags={perfil.tags} />
+						<MainBio text={perfil.bio} />
+						<MainTags tags={perfil.tags} />
 					</div>
 				</div>
 			</section>

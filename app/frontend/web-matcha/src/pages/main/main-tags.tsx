@@ -4,7 +4,7 @@ type TagsType = {
 	tags: string[]
 }
 
-export function Tags({ tags }: TagsType) {
+export function MainTags({ tags }: TagsType) {
 	return (
 		<div className="">
 			{tags.map((tag) => {
