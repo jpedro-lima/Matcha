@@ -6,6 +6,8 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import googleLogo from '@/assets/google-logo.svg'
 import { ResetPassword } from './reset-password'
+import { useMutation } from '@tanstack/react-query'
+import { signIn } from '@/api/sign-in'
 
 const signInSchema = z.object({
 	email: z.string().email(),
@@ -23,8 +25,21 @@ export function SignIn() {
 		resolver: zodResolver(signInSchema),
 	})
 
-	function handleRegister(data: SignInForm) {
-		toast.success('login as ' + data.email + ' and ' + data.password)
+	const { mutateAsync: authenticate } = useMutation({ mutationFn: signIn })
+
+	async function handleSignIn({ email, password }: SignInForm) {
+		try {
+			await authenticate({ email, password })
+
+			toast.success('E-mail de autenticação enviado', {
+				action: {
+					label: 'Reenviar',
+					onClick: () => console.log('E-mail de autenticação reenviado'),
+				},
+			})
+		} catch {
+			toast.error('Credenciais invalidas')
+		}
 	}
 
 	const checkErrorsForm = () => {
@@ -39,7 +54,7 @@ export function SignIn() {
 
 			<main className="md:bg-muted flex">
 				<div className="mx-auto h-[30rem] w-80 md:my-auto md:ml-22 md:w-96">
-					<form onSubmit={handleSubmit(handleRegister)} className="flex flex-col">
+					<form onSubmit={handleSubmit(handleSignIn)} className="flex flex-col">
 						<Input type="text" placeholder="Username" {...register('email')} />
 						<Input type="password" placeholder="Password" {...register('password')} />
 						<ResetPassword />

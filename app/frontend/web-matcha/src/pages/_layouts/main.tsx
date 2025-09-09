@@ -15,7 +15,7 @@ import { RoseMask } from '@/components/rose-mask'
 export function MainLayout() {
 	return (
 		<div className="h-lvh w-lvw antialiased">
-			<header className="flex w-full">
+			<header className="flex h-[8vh] w-full">
 				<img
 					src={matchaLogo}
 					alt="rose"
@@ -30,8 +30,8 @@ export function MainLayout() {
 				</div>
 			</header>
 
-			<section className="flex h-[calc(100%-4.2rem)] w-full flex-col sm:flex-row">
-				<main className="relative h-[calc(100%-3rem)] w-full overflow-scroll sm:h-full">
+			<section className="flex h-[92vh] w-full flex-col overflow-hidden sm:flex-row">
+				<main className="h-full w-full sm:h-full">
 					<Outlet />
 				</main>
 

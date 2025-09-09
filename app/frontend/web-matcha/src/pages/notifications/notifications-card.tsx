@@ -43,12 +43,12 @@ export function NotificationsCard({
 				</header>
 
 				<section className="text-sm sm:hidden">
-					{!active && content.length > 70
+					{!active && content.length > 60
 						? content.substring(0, 67).concat('...')
 						: content}
 				</section>
 				<section className="hidden sm:inline">
-					{content.length > 70 ? content.substring(0, 67).concat('...') : content}
+					{content.length > 60 ? content.substring(0, 57).concat('...') : content}
 				</section>
 			</CardContent>
 		</Card>
