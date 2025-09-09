@@ -7,6 +7,8 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { PasswordValidationTooltip } from './password-validation-tooltip'
 import googleLogo from '@/assets/google-logo.svg'
+import { useMutation } from '@tanstack/react-query';
+import axios from 'axios';
 
 const registerSchema = z.object({
 	username: z.string().nonempty('Please enter your username'),
@@ -34,29 +36,31 @@ export function Register() {
 		resolver: zodResolver(registerSchema),
 	})
 
+	// Inside your Register component
+	const registerMutation = useMutation({
+	mutationFn: (data: RegisterForm) =>
+		axios.post(`${import.meta.env.VITE_BACKEND_URL}/register`, {
+		username: data.username,
+		first_name: data.firstName,
+		last_name: data.lastName,
+		email: data.email,
+		password: data.password,
+		validate_password: data.validatePassword,
+		}),
+	onSuccess: () => {
+		toast.success('Registered successfully');
+	},
+	onError: () => {
+		toast.error('Registration failed');
+	},
+	});
+
 	async function handleRegister(data: RegisterForm) {
-        if (data.password === data.validatePassword) {
-            try {
-                const res = await fetch(`${import.meta.env.VITE_BACKEND_URL}/register`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        username: data.username,
-                        first_name: data.firstName,
-                        last_name: data.lastName,
-                        email: data.email,
-                        password: data.password,
-                        validate_password: data.validatePassword,
-                    }),
-                });
-                if (res.ok) toast.success('Registered successfully');
-                else toast.error('Registration failed');
-            } catch (err) {
-                console.error(err);
-                toast.error('Error connecting to server');
-            }
-        } else toast.error('Passwords not matching');
-    }
+	if (data.password !== data.validatePassword) {
+		return toast.error('Passwords not matching');
+	}
+	registerMutation.mutate(data);
+	}
 
 
 	const checkErrorsForm = () => {

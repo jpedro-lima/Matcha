@@ -1,4 +1,4 @@
-import { api } from '@/libs/axios'
+import { api } from '@/lib/axios'
 
 interface SignInProps {
 	email: string
