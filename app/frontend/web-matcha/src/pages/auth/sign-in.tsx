@@ -25,7 +25,7 @@ export function SignIn() {
 
 	async function handleRegister(data: SignInForm) {
         try {
-            const res = await fetch('http://localhost:8080/login', {
+            const res = await fetch(`${import.meta.env.VITE_BACKEND_URL}/login`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -59,7 +59,7 @@ export function SignIn() {
 			<main className="md:bg-muted flex">
 				<div className="mx-auto h-[30rem] w-80 md:my-auto md:ml-22 md:w-96">
 					<form onSubmit={handleSubmit(handleRegister)} className="flex flex-col">
-						<Input type="text" placeholder="Username" {...register('email')} />
+						<Input type="text" placeholder="Email" {...register('email')} />
 						<Input type="password" placeholder="Password" {...register('password')} />
 						<ResetPassword />
 

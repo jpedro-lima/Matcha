@@ -37,7 +37,7 @@ export function Register() {
 	async function handleRegister(data: RegisterForm) {
         if (data.password === data.validatePassword) {
             try {
-                const res = await fetch('http://localhost:8080/register', {
+                const res = await fetch(`${import.meta.env.VITE_BACKEND_URL}/register`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
