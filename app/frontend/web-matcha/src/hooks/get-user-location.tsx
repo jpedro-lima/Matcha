@@ -34,7 +34,7 @@ export async function getUserLocation(): Promise<LocationData> {
 			country: locationResponse.data.address.country,
 		}
 	} catch (error) {
-		console.log(error)
+		console.error(error)
 
 		try {
 			const ipResponse = await axios.get<{ ip: string }>(

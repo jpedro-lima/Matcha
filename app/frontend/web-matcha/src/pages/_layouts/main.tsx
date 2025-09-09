@@ -35,7 +35,7 @@ export function MainLayout() {
 					<Outlet />
 				</main>
 
-				<nav className="text-muted-foreground absolute bottom-0 flex h-12 items-center gap-5 self-center sm:relative sm:h-full sm:w-15 sm:flex-col sm:justify-end sm:gap-3">
+				<nav className="text-muted-foreground absolute bottom-0 flex h-12 items-center gap-5 self-center sm:relative sm:mb-5 sm:h-full sm:w-15 sm:flex-col sm:justify-end sm:gap-3">
 					<NavLink
 						to="/notifications"
 						className={({ isActive }) => (isActive ? 'text-rose-700' : '')}

@@ -62,8 +62,8 @@ export function Notifications() {
 	const { timeZone } = Intl.DateTimeFormat().resolvedOptions()
 
 	return (
-		<main className="grid h-full w-full md:grid-cols-2">
-			<div className="hidden justify-end self-center sm:flex">
+		<main className="grid h-full w-full md:grid-cols-[70%_30%]">
+			<div className="hidden justify-center self-center sm:flex">
 				{activeCard && (
 					<NotificationsBoardCard
 						title={activeCard.title}
@@ -74,7 +74,7 @@ export function Notifications() {
 					/>
 				)}
 			</div>
-			<div className="sm:bg-muted flex flex-col gap-2.5 px-4 sm:ml-[4rem] sm:py-4">
+			<div className="sm:bg-muted flex max-h-full flex-col gap-2.5 px-4 sm:overflow-scroll sm:py-4">
 				{cardDataList.map((card) => {
 					return (
 						<NotificationsCard

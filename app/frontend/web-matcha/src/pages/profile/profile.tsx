@@ -14,13 +14,13 @@ export function Profile() {
 
 	return (
 		<main className="grid h-full w-full md:grid-cols-2">
-			<section className="order-1 mt-2.5 sm:order-0">
+			<section className="order-1 mt-2.5 self-center sm:order-0">
 				<CarouselForm />
 			</section>
 
-			<section className="sm:bg-muted mt-2.5 flex flex-col p-4 sm:ml-[4rem]">
-				<div className="flex w-82 flex-col self-center sm:my-auto sm:ml-4 sm:w-8/12 sm:self-start">
-					<div className="flex flex-col items-end">
+			<section className="sm:bg-muted flex flex-col p-4 sm:ml-[4rem]">
+				<div className="flex w-82 flex-col self-center sm:my-auto sm:ml-12 sm:w-8/12 sm:self-start">
+					<header className="flex flex-col items-end">
 						<h1 className="font-markazi text-muted-foreground text-3xl">
 							João Pedro Correia
 						</h1>
@@ -39,7 +39,7 @@ export function Profile() {
 								325
 							</span>
 						</div>
-					</div>
+					</header>
 
 					<ProfileForm />
 				</div>
