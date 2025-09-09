@@ -23,9 +23,28 @@ export function SignIn() {
 		resolver: zodResolver(signInSchema),
 	})
 
-	function handleRegister(data: SignInForm) {
-		toast.success('login as ' + data.email + ' and ' + data.password)
-	}
+	async function handleRegister(data: SignInForm) {
+        try {
+            const res = await fetch('http://localhost:8080/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    email: data.email,
+                    password: data.password,
+                }),
+            });
+
+            if (res.ok) {
+                toast.success('Login successful');
+                // optionally: const result = await res.json();
+            } else {
+                toast.error('Login failed');
+            }
+        } catch (err) {
+            console.error(err);
+            toast.error('Error connecting to server');
+        }
+    }
 
 	const checkErrorsForm = () => {
 		Object.values(errors).forEach((error) => {

@@ -31,7 +31,8 @@
 
     function connect() {
       const matchID = document.getElementById("match").value;
-      socket = new WebSocket(`ws://${location.host}/ws?match_id=${matchID}`);
+	  console.log(location.host)
+      socket = new WebSocket(`ws://127.0.0.1:8080/ws?match_id=${matchID}`);
 
       socket.onmessage = event => {
         const msg = JSON.parse(event.data);

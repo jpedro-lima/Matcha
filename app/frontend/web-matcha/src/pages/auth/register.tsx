@@ -34,10 +34,30 @@ export function Register() {
 		resolver: zodResolver(registerSchema),
 	})
 
-	function handleRegister(data: RegisterForm) {
-		if (data.password === data.validatePassword) toast.success('Senha igual')
-		else toast.error('Passwords not matching')
-	}
+	async function handleRegister(data: RegisterForm) {
+        if (data.password === data.validatePassword) {
+            try {
+                const res = await fetch('http://localhost:8080/register', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        username: data.username,
+                        first_name: data.firstName,
+                        last_name: data.lastName,
+                        email: data.email,
+                        password: data.password,
+                        validate_password: data.validatePassword,
+                    }),
+                });
+                if (res.ok) toast.success('Registered successfully');
+                else toast.error('Registration failed');
+            } catch (err) {
+                console.error(err);
+                toast.error('Error connecting to server');
+            }
+        } else toast.error('Passwords not matching');
+    }
+
 
 	const checkErrorsForm = () => {
 		Object.values(errors).forEach((error) => {
