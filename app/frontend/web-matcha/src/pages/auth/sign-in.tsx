@@ -6,7 +6,8 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import googleLogo from '@/assets/google-logo.svg'
 import { ResetPassword } from './reset-password'
-
+import { useMutation } from '@tanstack/react-query';
+import axios from 'axios';
 const signInSchema = z.object({
 	email: z.string().email(),
 	password: z.string().nonempty('Please enter your password'),
@@ -23,8 +24,30 @@ export function SignIn() {
 		resolver: zodResolver(signInSchema),
 	})
 
-	function handleRegister(data: SignInForm) {
-		toast.success('login as ' + data.email + ' and ' + data.password)
+	const loginMutation = useMutation({
+	mutationFn: (data: SignInForm) =>
+		axios.post(`${import.meta.env.VITE_BACKEND_URL}/login`, {
+		email: data.email,
+		password: data.password,
+		}),
+	onSuccess: () => {
+		toast.success('Login successful');
+	},
+	onError: (error) => {
+	let message = 'Login failed. Please check your credentials.';
+
+	// Check if it's an Axios error
+	if (axios.isAxiosError(error)) {
+		message = error.response?.data?.message || error.message || message;
+	}
+
+	toast.error(message);
+	console.error('Login error:', error);
+	}
+	});
+
+	async function handleLogin(data:  SignInForm) {
+	loginMutation.mutate(data);
 	}
 
 	const checkErrorsForm = () => {
@@ -39,7 +62,7 @@ export function SignIn() {
 
 			<main className="md:bg-muted flex">
 				<div className="mx-auto h-[30rem] w-80 md:my-auto md:ml-22 md:w-96">
-					<form onSubmit={handleSubmit(handleRegister)} className="flex flex-col">
+					<form onSubmit={handleSubmit(handleLogin)} className="flex flex-col">
 						<Input type="text" placeholder="Username" {...register('email')} />
 						<Input type="password" placeholder="Password" {...register('password')} />
 						<ResetPassword />

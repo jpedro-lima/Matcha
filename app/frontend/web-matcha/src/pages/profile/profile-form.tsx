@@ -117,7 +117,7 @@ export function ProfileForm() {
 	}
 
 	function handleProfileForm(data: ProfileFormType) {
-		alert(JSON.stringify(data))
+		alert(JSON.stringify(data)) //inserir funçcao pro back
 	}
 
 	const checkErrorsForm = () => {
