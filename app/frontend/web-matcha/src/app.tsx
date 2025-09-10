@@ -4,7 +4,7 @@ import { Router } from './router'
 import { ThemeProvider } from './components/theme/theme-provider'
 import { Toaster } from 'sonner'
 import { QueryClientProvider } from '@tanstack/react-query'
-import { queryClient } from './lib/react-query'
+import { queryClient } from './libs/react-query'
 
 function App() {
 	return (
