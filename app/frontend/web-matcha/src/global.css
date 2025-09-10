@@ -4,8 +4,8 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme {
-	--font-updock: "Updock", cursive;
-	--font-markazi: "Markazi Text", serif;
+	--font-updock: 'Updock', cursive;
+	--font-markazi: 'Markazi Text', serif;
 }
 
 @theme inline {
@@ -107,7 +107,7 @@
 	--chart-5: oklch(0.645 0.246 16.439);
 	--sidebar: oklch(0.21 0.006 285.885);
 	--sidebar-foreground: oklch(0.985 0 0);
-	--sidebar-primary: oklch(0.645 0.246 16.439);
+	--sidebar-primary: (0.645 0.246 16.439);
 	--sidebar-primary-foreground: oklch(0.969 0.015 12.422);
 	--sidebar-accent: oklch(0.274 0.006 286.033);
 	--sidebar-accent-foreground: oklch(0.985 0 0);
@@ -118,6 +118,9 @@
 @layer base {
 	* {
 		@apply border-border outline-ring/50;
+
+		scrollbar-width: thin;
+		scrollbar-color: var(--muted-foreground) transparent;
 	}
 	body {
 		@apply bg-background text-foreground;

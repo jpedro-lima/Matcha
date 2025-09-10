@@ -1,5 +1,5 @@
 import { CarouselImages } from '@/components/carousel-images'
-import { HandHeart, MapPin, Minus } from 'lucide-react'
+import { HandHeart, HeartHandshake, HeartOff, MapPin, Minus } from 'lucide-react'
 
 // interface User {
 // 	firstName: string
@@ -61,8 +61,8 @@ export function Main() {
 				<CarouselImages images={perfil.images} />
 			</section>
 
-			<section className="sm:bg-muted flex flex-col p-4 sm:ml-[4rem]">
-				<div className="flex w-82 flex-col self-center sm:my-auto sm:ml-12 sm:w-8/12 sm:self-start">
+			<section className="sm:bg-muted flex flex-col overflow-hidden sm:ml-[4rem]">
+				<div className="flex w-82 flex-col self-center p-4 sm:my-auto sm:ml-12 sm:w-9/12 sm:self-start">
 					<header className="flex flex-col items-end">
 						<h1 className="font-markazi text-muted-foreground text-3xl">{`${perfil.firstName} ${perfil.lastName} `}</h1>
 						<Minus className="my-[-15px] mr-[-5px] size-8 text-rose-700" />
@@ -79,9 +79,21 @@ export function Main() {
 						</div>
 					</header>
 
-					<div className="flex flex-col gap-3">
+					<div className="flex flex-col gap-4">
 						<MainBio text={perfil.bio} />
 						<MainTags tags={perfil.tags} />
+					</div>
+				</div>
+				<div className="flex justify-between align-bottom">
+					<div className="mb-[-88px] ml-[-88px] size-44 rotate-45 bg-red-700 active:opacity-40 dark:bg-red-900">
+						<div className="mt-3 ml-[58px] h-1/3 w-1/3 rotate-[-45deg] p-2">
+							<HeartOff className="text-muted size-12" />
+						</div>
+					</div>
+					<div className="mr-[-88px] mb-[-88px] size-44 rotate-45 bg-emerald-600 active:opacity-40 dark:bg-emerald-900">
+						<div className="mt-[58px] ml-3 h-1/3 w-1/3 rotate-[-45deg] p-2">
+							<HeartHandshake className="text-muted size-12 dark:text-neutral-300" />
+						</div>
 					</div>
 				</div>
 			</section>

@@ -14,7 +14,7 @@ export function NotificationsBoardCard({
 	timeZone,
 }: NotificationsBoardCardType) {
 	return (
-		<Card className="bg-muted m-4 sm:h-[700px] sm:w-[600px]">
+		<Card className="bg-muted m-4 h-[80vh] w-10/12">
 			<CardContent className="font-markazi flex h-full flex-col items-center text-xl">
 				<CardTitle className="text-primary mb-2 text-center">
 					<p>{title}</p>
