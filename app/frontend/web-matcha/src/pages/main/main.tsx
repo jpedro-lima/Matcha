@@ -87,7 +87,7 @@ export function Main() {
 				<div className="flex justify-between align-bottom">
 					<div className="mb-[-88px] ml-[-88px] size-44 rotate-45 bg-red-700 active:opacity-40 dark:bg-red-900">
 						<div className="mt-3 ml-[58px] h-1/3 w-1/3 rotate-[-45deg] p-2">
-							<HeartOff className="text-muted size-12" />
+							<HeartOff className="text-muted size-12 dark:text-neutral-300" />
 						</div>
 					</div>
 					<div className="mr-[-88px] mb-[-88px] size-44 rotate-45 bg-emerald-600 active:opacity-40 dark:bg-emerald-900">
