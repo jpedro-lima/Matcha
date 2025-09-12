@@ -4,7 +4,7 @@ import (
     "encoding/json"
     "net/http"
     "strconv"
-
+	"log"
     "github.com/go-chi/chi/v5"
     "github.com/jpedro-lima/Matcha/models"
 	"github.com/jpedro-lima/Matcha/utils"
@@ -16,7 +16,8 @@ import (
 func CreateProfile(w http.ResponseWriter, r *http.Request) {
     userID, err := utils.GetUserIDFromRequest(r)
     if err != nil {
-        http.Error(w, "Unauthorized", http.StatusUnauthorized)
+        log.Printf("Auth error: %v", err)
+        http.Error(w, err.Error(), http.StatusUnauthorized)
         return
     }
 
@@ -80,7 +81,7 @@ func CreateProfile(w http.ResponseWriter, r *http.Request) {
 func UpdateProfile(w http.ResponseWriter, r *http.Request) {
     userID, err := utils.GetUserIDFromRequest(r)
     if err != nil {
-        http.Error(w, "Unauthorized", http.StatusUnauthorized)
+        http.Error(w, "Unauthorized4", http.StatusUnauthorized)
         return
     }
 
@@ -176,7 +177,7 @@ func UpdateProfile(w http.ResponseWriter, r *http.Request) {
 func DeleteProfile(w http.ResponseWriter, r *http.Request) {
     userID, err := utils.GetUserIDFromRequest(r)
     if err != nil {
-        http.Error(w, "Unauthorized", http.StatusUnauthorized)
+        http.Error(w, "Unauthorized5", http.StatusUnauthorized)
         return
     }
 
