@@ -74,7 +74,6 @@ func Register(w http.ResponseWriter, r *http.Request) {
     // Replace this with your actual email sending logic
     fmt.Fprintf(os.Stdout, "Send confirmation email to %s with link: %s\n", req.Email, confirmationLink)
 
-        // 👇 SEND IT IN THE RESPONSE (instead of just printing)
     w.Header().Set("Content-Type", "application/json")
     w.WriteHeader(http.StatusCreated)
     json.NewEncoder(w).Encode(map[string]interface{}{
