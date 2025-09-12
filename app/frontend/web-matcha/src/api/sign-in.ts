@@ -15,7 +15,7 @@ export interface SignInResponse {
 }
 
 export async function signIn({ email, password, strategy = 'local' }: SignInProps) {
-	const response = await api.post<SignInResponse>('/sign-in', {
+	const response = await api.post<SignInResponse>('/login', {
 		email,
 		password,
 		strategy,

@@ -9,6 +9,7 @@ import { PasswordValidationTooltip } from './password-validation-tooltip'
 import googleLogo from '@/assets/google-logo.svg'
 import { useMutation } from '@tanstack/react-query';
 import axios from 'axios';
+import { registerUser } from '@/api/register'
 
 const registerSchema = z.object({
 	username: z.string().nonempty('Please enter your username'),
@@ -31,42 +32,30 @@ export function Register() {
 		register,
 		handleSubmit,
 		watch,
-		formState: { isSubmitting, errors },
+		formState: { isSubmitting },
 	} = useForm<RegisterForm>({
 		resolver: zodResolver(registerSchema),
 	})
 
 	// Inside your Register component
-	const registerMutation = useMutation({
-	mutationFn: (data: RegisterForm) =>
-		axios.post(`${import.meta.env.VITE_BACKEND_URL}/register`, {
-		username: data.username,
-		first_name: data.firstName,
-		last_name: data.lastName,
-		email: data.email,
-		password: data.password,
-		validate_password: data.validatePassword,
-		}),
-	onSuccess: () => {
-		toast.success('Registered successfully');
-	},
-	onError: () => {
-		toast.error('Registration failed');
-	},
+		const { mutateAsync: registerMutation } = useMutation({
+			mutationFn: registerUser,
+			onSuccess: () => {
+				toast.success('Registered successfully');
+		},
+		onError: (error) => {
+			const message = 'Registration failed';
+			toast.error(message);
+			console.error('Registration error:', error)
+		},
 	});
 
 	async function handleRegister(data: RegisterForm) {
-	if (data.password !== data.validatePassword) {
-		return toast.error('Passwords not matching');
-	}
-	registerMutation.mutate(data);
-	}
-
-
-	const checkErrorsForm = () => {
-		Object.values(errors).forEach((error) => {
-			toast.error(error.message)
-		})
+		try {
+		await registerMutation(data);
+		} catch {
+		// error already handled in onError
+		}
 	}
 
 	const password = watch('password', '')
@@ -102,7 +91,6 @@ export function Register() {
 						<Button
 							type="submit"
 							disabled={isSubmitting}
-							onClick={checkErrorsForm}
 							className="mt-6"
 						>
 							Register
