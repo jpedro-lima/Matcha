@@ -8,6 +8,7 @@ import googleLogo from '@/assets/google-logo.svg'
 import { ResetPassword } from './reset-password'
 import { useMutation } from '@tanstack/react-query'
 import axios from 'axios'
+import { signIn } from '@/api/sign-in'
 const signInSchema = z.object({
 	email: z.string().email(),
 	password: z.string().nonempty('Please enter your password'),
@@ -19,41 +20,29 @@ export function SignIn() {
 	const {
 		register,
 		handleSubmit,
-		formState: { isSubmitting, errors },
+		formState: { isSubmitting },
 	} = useForm<SignInForm>({
 		resolver: zodResolver(signInSchema),
 	})
 
-	const loginMutation = useMutation({
-		mutationFn: (data: SignInForm) =>
-			axios.post(`${import.meta.env.VITE_BACKEND_URL}/login`, {
-				email: data.email,
-				password: data.password,
-			}),
+	const { mutateAsync: authenticate } = useMutation({
+		mutationFn: signIn,
 		onSuccess: () => {
 			toast.success('Login successful')
 		},
 		onError: (error) => {
-			let message = 'Login failed. Please check your credentials.'
-
-			// Check if it's an Axios error
-			if (axios.isAxiosError(error)) {
-				message = error.response?.data?.message || error.message || message
-			}
-
+			const message = 'Login failed. Please check your credentials.'
 			toast.error(message)
 			console.error('Login error:', error)
 		},
 	})
 
 	async function handleLogin(data: SignInForm) {
-		loginMutation.mutate(data)
-	}
-
-	const checkErrorsForm = () => {
-		Object.values(errors).forEach((error) => {
-			toast.error(error.message)
-		})
+		try {
+			await authenticate(data)
+		} catch {
+			// error already handled in onError
+		}
 	}
 
 	return (
@@ -70,7 +59,6 @@ export function SignIn() {
 						<Button
 							type="submit"
 							disabled={isSubmitting}
-							onClick={checkErrorsForm}
 							className="mt-6"
 						>
 							Sign in
