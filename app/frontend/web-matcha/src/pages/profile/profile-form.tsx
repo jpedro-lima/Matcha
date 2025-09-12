@@ -95,10 +95,10 @@ export function ProfileForm() {
 	const mutation = useMutation({
 		mutationFn: (payload: ProfilePayload) => createProfile(payload, token),
 		onSuccess: () => {
-		toast.success('Profile created successfully!')
+			toast.success('Profile created successfully!')
 		},
 		onError: () => {
-		toast.error('Failed to create profile')
+			toast.error('Failed to create profile')
 		},
 	})
 
@@ -111,8 +111,8 @@ export function ProfileForm() {
 	} = useForm<ProfileFormType>({
 		resolver: zodResolver(profileFormSchema),
 		defaultValues: {
-		preferenceGender: [],
-		tags: [],
+			preferenceGender: [],
+			tags: [],
 		},
 	})
 
@@ -124,29 +124,35 @@ export function ProfileForm() {
 
 	function handleAddTag(tag: string) {
 		if (!selectedTags.includes(tag)) {
-		const newTags = [...selectedTags, tag]
-		setSelectedTags(newTags)
-		setValue('tags', newTags as [string, ...string[]])
+			const newTags = [...selectedTags, tag]
+			setSelectedTags(newTags)
+			setValue('tags', newTags as [string, ...string[]])
 		}
 	}
 
 	function handleProfileForm(data: ProfileFormType) {
 		mutation.mutate({
-		bio: data.bio,
-		gender: data.gender,
-		preferred_gender: data.preferenceGender,
-		birth_date: '1990-01-01', // make dynamic if needed
-		search_radius: 50,
-		tags: data.tags,
-		attributes: { height: '180cm', occupation: 'Software Engineer' },
-		looking_for: { relationship_type: 'long-term', interests: ['outdoor activities', 'tech'] },
-		profile_photos: ['https://example.com/photo1.jpg', 'https://example.com/photo2.jpg'],
+			bio: data.bio,
+			gender: data.gender,
+			preferred_gender: data.preferenceGender,
+			birth_date: '1990-01-01', // make dynamic if needed
+			search_radius: 50,
+			tags: data.tags,
+			attributes: { height: '180cm', occupation: 'Software Engineer' },
+			looking_for: {
+				relationship_type: 'long-term',
+				interests: ['outdoor activities', 'tech'],
+			},
+			profile_photos: [
+				'https://example.com/photo1.jpg',
+				'https://example.com/photo2.jpg',
+			],
 		})
 	}
 
 	const checkErrorsForm = () => {
 		Object.values(errors).forEach((error) => {
-		toast.error(error.message)
+			toast.error(error.message)
 		})
 	}
 
