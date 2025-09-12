@@ -27,8 +27,10 @@ export function SignIn() {
 
 	const { mutateAsync: authenticate } = useMutation({
 		mutationFn: signIn,
-		onSuccess: () => {
+		onSuccess: (data) => {
+			console.log(data)
 			toast.success('Login successful')
+			localStorage.setItem('accessToken', data.accessToken);
 		},
 		onError: (error) => {
 			const message = 'Login failed. Please check your credentials.'

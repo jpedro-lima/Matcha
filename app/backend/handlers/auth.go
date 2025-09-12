@@ -74,8 +74,13 @@ func Register(w http.ResponseWriter, r *http.Request) {
     // Replace this with your actual email sending logic
     fmt.Fprintf(os.Stdout, "Send confirmation email to %s with link: %s\n", req.Email, confirmationLink)
 
+        // 👇 SEND IT IN THE RESPONSE (instead of just printing)
+    w.Header().Set("Content-Type", "application/json")
     w.WriteHeader(http.StatusCreated)
-    json.NewEncoder(w).Encode(map[string]string{"message": "Please confirm your email to complete registration."})
+    json.NewEncoder(w).Encode(map[string]interface{}{
+        "message":          "Please confirm your email to complete registration.",
+        "confirmationLink": confirmationLink, // ✅ This is what frontend will use
+    })
 }
 
 // Email confirmation handler
@@ -145,7 +150,7 @@ func Login(w http.ResponseWriter, r *http.Request) {
     json.NewEncoder(w).Encode(map[string]string{"token": token})
 }
 
-// Logout handler (for JWT, client just deletes token, but endpoint for completeness)
+// Logout handler (for JWT, client just deletes token)
 func Logout(w http.ResponseWriter, r *http.Request) {
     // For stateless JWT, just instruct client to delete token
     w.WriteHeader(http.StatusOK)
