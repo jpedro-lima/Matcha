@@ -30,7 +30,7 @@ export function SignIn() {
 		onSuccess: (data) => {
 			console.log(data)
 			toast.success('Login successful')
-			localStorage.setItem('accessToken', data.accessToken);
+			localStorage.setItem('accessToken', data.accessToken)
 		},
 		onError: (error) => {
 			const message = 'Login failed. Please check your credentials.'
@@ -58,11 +58,7 @@ export function SignIn() {
 						<Input type="password" placeholder="Password" {...register('password')} />
 						<ResetPassword />
 
-						<Button
-							type="submit"
-							disabled={isSubmitting}
-							className="mt-6"
-						>
+						<Button type="submit" disabled={isSubmitting} className="mt-6">
 							Sign in
 						</Button>
 						<p className="my-1 text-center">or</p>
