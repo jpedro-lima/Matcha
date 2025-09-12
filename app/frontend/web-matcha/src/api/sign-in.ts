@@ -7,7 +7,7 @@ interface SignInProps {
 }
 
 export interface SignInResponse {
-	accessToken: string
+	token: string
 	user: {
 		id: string
 		name: string

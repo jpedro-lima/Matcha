@@ -8,7 +8,6 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { PasswordValidationTooltip } from './password-validation-tooltip'
 import googleLogo from '@/assets/google-logo.svg'
 import { useMutation } from '@tanstack/react-query'
-import axios from 'axios'
 import { registerUser } from '@/api/register'
 
 const registerSchema = z.object({

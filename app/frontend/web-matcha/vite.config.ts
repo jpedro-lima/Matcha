@@ -12,4 +12,8 @@ export default defineConfig({
 			'@': path.resolve(__dirname, './src'),
 		},
 	},
+  server: {
+    host: '0.0.0.0', // Bind to all interfaces for Docker
+    port: 5173, // Ensure port matches docker-compose.yml
+  },
 })

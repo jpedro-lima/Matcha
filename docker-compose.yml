@@ -26,6 +26,13 @@ services:
       interval: 5s
       timeout: 3s
       retries: 5
+  frontend:
+    build: ./app/frontend/web-matcha
+    ports:
+      - "5173:5173"
+    depends_on:
+      - app
+    command: npm run dev
 
 volumes:
   db-data:

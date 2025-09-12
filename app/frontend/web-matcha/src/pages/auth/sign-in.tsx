@@ -7,8 +7,8 @@ import { Button } from '@/components/ui/button'
 import googleLogo from '@/assets/google-logo.svg'
 import { ResetPassword } from './reset-password'
 import { useMutation } from '@tanstack/react-query'
-import axios from 'axios'
 import { signIn } from '@/api/sign-in'
+
 const signInSchema = z.object({
 	email: z.string().email(),
 	password: z.string().nonempty('Please enter your password'),
@@ -30,7 +30,7 @@ export function SignIn() {
 		onSuccess: (data) => {
 			console.log(data)
 			toast.success('Login successful')
-			localStorage.setItem('accessToken', data.accessToken)
+			localStorage.setItem('accessToken', data.token)
 		},
 		onError: (error) => {
 			const message = 'Login failed. Please check your credentials.'
