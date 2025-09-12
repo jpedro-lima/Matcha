@@ -7,8 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { PasswordValidationTooltip } from './password-validation-tooltip'
 import googleLogo from '@/assets/google-logo.svg'
-import { useMutation } from '@tanstack/react-query';
-import axios from 'axios';
+import { useMutation } from '@tanstack/react-query'
 import { registerUser } from '@/api/register'
 
 const registerSchema = z.object({
@@ -38,23 +37,23 @@ export function Register() {
 	})
 
 	// Inside your Register component
-		const { mutateAsync: registerMutation } = useMutation({
-			mutationFn: registerUser,
-			onSuccess: () => {
-				toast.success('Registered successfully');
+	const { mutateAsync: registerMutation } = useMutation({
+		mutationFn: registerUser,
+		onSuccess: () => {
+			toast.success('Registered successfully')
 		},
 		onError: (error) => {
-			const message = 'Registration failed';
-			toast.error(message);
+			const message = 'Registration failed'
+			toast.error(message)
 			console.error('Registration error:', error)
 		},
-	});
+	})
 
 	async function handleRegister(data: RegisterForm) {
 		try {
-		await registerMutation(data);
+			await registerMutation(data)
 		} catch {
-		// error already handled in onError
+			// error already handled in onError
 		}
 	}
 
@@ -88,11 +87,7 @@ export function Register() {
 							placeholder="Confirm your Password"
 						/>
 
-						<Button
-							type="submit"
-							disabled={isSubmitting}
-							className="mt-6"
-						>
+						<Button type="submit" disabled={isSubmitting} className="mt-6">
 							Register
 						</Button>
 						<p className="my-3 text-center">or</p>
