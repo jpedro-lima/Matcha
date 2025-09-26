@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"database/sql"
 	"encoding/json"
 	"math/rand"
 	"net/http"
@@ -13,48 +14,48 @@ import (
 
 // SuggestedProfile represents the lightweight view returned to frontend
 type SuggestedProfile struct {
-    ID           int    `json:"id" db:"id"`
-    Bio          string `json:"bio" db:"bio"`
-    Gender       string `json:"gender" db:"gender"`
-    ProfilePhoto string `json:"profile_photos" db:"first_photo"`
+	ID           int    `json:"id" db:"id"`
+	Bio          string `json:"bio" db:"bio"`
+	Gender       string `json:"gender" db:"gender"`
+	ProfilePhoto string `json:"profile_photos" db:"first_photo"`
 }
 
 func GetSuggestedProfile(w http.ResponseWriter, r *http.Request) {
-    userID, err := utils.GetUserIDFromRequest(r)
-    if err != nil {
-        http.Error(w, "Unauthorized", http.StatusUnauthorized)
-        return
-    }
+	userID, err := utils.GetUserIDFromRequest(r)
+	if err != nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
 
-    // Get current user's profile
-    var userProfile struct {
-    Gender          string         `db:"gender"`
-    PreferredGender pq.StringArray `db:"preferred_gender"`
-    BirthDate       time.Time      `db:"birth_date"`
-    Location        string         `db:"location"`
-    SearchRadius    int            `db:"search_radius"`
-}
-    err = config.DB.Get(&userProfile, `
+	// Get current user's profile
+	var userProfile struct {
+		Gender          string         `db:"gender"`
+		PreferredGender pq.StringArray `db:"preferred_gender"`
+		BirthDate       time.Time      `db:"birth_date"`
+		Location        string         `db:"location"`
+		SearchRadius    int            `db:"search_radius"`
+	}
+	err = config.DB.Get(&userProfile, `
         SELECT gender, preferred_gender, birth_date,
                ST_AsText(location) AS location, search_radius
         FROM profiles
         WHERE user_id = $1
     `, userID)
-    if err != nil {
-        http.Error(w, "Profile not found", http.StatusNotFound)
-        return
-    }
+	if err != nil {
+		http.Error(w, "Profile not found", http.StatusNotFound)
+		return
+	}
 
-    // Calculate acceptable age range (example: 25–35)
-    minAge := 25
-    maxAge := 135
-    today := time.Now()
-    minBirth := today.AddDate(-maxAge, 0, 0)
-    maxBirth := today.AddDate(-minAge, 0, 0)
+	// Calculate acceptable age range (example: 25–35)
+	minAge := 25
+	maxAge := 135
+	today := time.Now()
+	minBirth := today.AddDate(-maxAge, 0, 0)
+	maxBirth := today.AddDate(-minAge, 0, 0)
 
-    // Select nearby profiles that match gender & age preferences
-    var suggestions []SuggestedProfile
-    err = config.DB.Select(&suggestions, `
+	// Select nearby profiles that match gender & age preferences
+	var suggestions []SuggestedProfile
+	err = config.DB.Select(&suggestions, `
         SELECT p.id, p.bio, p.gender,
                COALESCE((p.profile_photos::jsonb ->> 0), '') AS first_photo
         FROM profiles p
@@ -66,95 +67,145 @@ func GetSuggestedProfile(w http.ResponseWriter, r *http.Request) {
         ORDER BY p.last_active DESC
         LIMIT 10
     `, userID, userProfile.Gender, pq.Array(userProfile.PreferredGender),
-       minBirth, maxBirth, userProfile.Location, userProfile.SearchRadius)
-    if err != nil {
-        http.Error(w, "Failed to retrieve suggestions: "+err.Error(), http.StatusInternalServerError)
-        return
-    }
+		minBirth, maxBirth, userProfile.Location, userProfile.SearchRadius)
+	if err != nil {
+		http.Error(w, "Failed to retrieve suggestions: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
 
-    if len(suggestions) == 0 {
-        http.Error(w, "No suitable profiles nearby", http.StatusNotFound)
-        return
-    }
+	if len(suggestions) == 0 {
+		http.Error(w, "No suitable profiles nearby", http.StatusNotFound)
+		return
+	}
 
-    // Pick one profile at random from matches
-    selected := suggestions[rand.Intn(len(suggestions))]
+	// Pick one profile at random from matches
+	selected := suggestions[rand.Intn(len(suggestions))]
 
-    w.Header().Set("Content-Type", "application/json")
-    json.NewEncoder(w).Encode(selected)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(selected)
 }
-
 
 // SwipeLike creates a match if mutual like is detected
 func SwipeLike(w http.ResponseWriter, r *http.Request) {
-    userID, err := utils.GetUserIDFromRequest(r)
-    if err != nil {
-        http.Error(w, "Unauthorized", http.StatusUnauthorized)
-        return
-    }
+	userID, err := utils.GetUserIDFromRequest(r)
+	if err != nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
 
-    var body struct {
-        TargetProfileID int `json:"target_profile_id"`
-    }
-    if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-        http.Error(w, "Invalid request body", http.StatusBadRequest)
-        return
-    }
+	var body struct {
+		TargetProfileID int `json:"target_profile_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
 
-    // Get target user ID from profile
-    var targetUserID int
-    err = config.DB.Get(&targetUserID, `SELECT user_id FROM profiles WHERE id = $1`, body.TargetProfileID)
-    if err != nil {
-        http.Error(w, "Target profile not found", http.StatusNotFound)
-        return
-    }
+	// Get target user ID from profile
+	var targetUserID int
+	err = config.DB.Get(&targetUserID, `SELECT user_id FROM profiles WHERE id = $1`, body.TargetProfileID)
+	if err != nil {
+		http.Error(w, "Target profile not found", http.StatusNotFound)
+		return
+	}
 
-    // Sort for unique (user1_id, user2_id)
-    user1, user2 := sortUsers(userID, targetUserID)
+	// Sort for unique (user1_id, user2_id)
+	user1, user2 := sortUsers(userID, targetUserID)
 
-    // Check if match already exists
-    var status string
-    err = config.DB.Get(&status, `
+	// Check if match already exists
+	var status string
+	qErr := config.DB.Get(&status, `
         SELECT status FROM matches
         WHERE user1_id = $1 AND user2_id = $2
     `, user1, user2)
 
-    switch {
-    case err != nil: // No match yet — insert pending
-        _, err = config.DB.Exec(`
+	if qErr == sql.ErrNoRows {
+		// No match yet — insert pending
+		_, insErr := config.DB.Exec(`
             INSERT INTO matches (user1_id, user2_id, matched_at, status)
             VALUES ($1, $2, $3, 'pending')
         `, user1, user2, time.Now())
-        if err != nil {
-            http.Error(w, "Failed to create match", http.StatusInternalServerError)
-            return
-        }
-        w.WriteHeader(http.StatusCreated)
-        w.Write([]byte(`{"status":"match created"}`))
-    case err == nil && status == "pending":
-        // Update to matched (this is the reciprocal swipe)
-        _, err = config.DB.Exec(`
+		if insErr != nil {
+			http.Error(w, "Failed to create match", http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusCreated)
+		w.Write([]byte(`{"status":"match created"}`))
+		return
+	} else if qErr != nil {
+		http.Error(w, "Match lookup failed", http.StatusInternalServerError)
+		return
+	}
+
+	if status == "pending" {
+		_, upErr := config.DB.Exec(`
             UPDATE matches
             SET status = 'accepted', matched_at = $1
             WHERE user1_id = $2 AND user2_id = $3
         `, time.Now(), user1, user2)
-        if err != nil {
-            http.Error(w, "Failed to update match to accepted", http.StatusInternalServerError)
-            return
-        }
-        w.WriteHeader(http.StatusOK)
-        w.Write([]byte(`{"status":"match updated to accepted"}`))
-    default:
-        // Ignore duplicates or errors
-        w.WriteHeader(http.StatusOK)
-        w.Write([]byte(`{"status":"already accepted or error"}`))
-    }
+		if upErr != nil {
+			http.Error(w, "Failed to update match to accepted", http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"status":"match updated to accepted"}`))
+		return
+	}
+
+	// Already accepted (or different status): return idempotent response
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(`{"status":"already accepted or error"}`))
 }
 
 func sortUsers(a, b int) (int, int) {
-    if a < b {
-        return a, b
-    }
-    return b, a
+	if a < b {
+		return a, b
+	}
+	return b, a
 }
 
+// Unmatch allows a user to remove an existing match (pending or accepted)
+func Unmatch(w http.ResponseWriter, r *http.Request) {
+	userID, err := utils.GetUserIDFromRequest(r)
+	if err != nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	var body struct {
+		TargetUserID    int `json:"target_user_id"`
+		TargetProfileID int `json:"target_profile_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if body.TargetUserID == 0 && body.TargetProfileID == 0 {
+		http.Error(w, "Provide target_user_id or target_profile_id", http.StatusBadRequest)
+		return
+	}
+
+	// Resolve user id from profile if needed
+	if body.TargetUserID == 0 {
+		err = config.DB.Get(&body.TargetUserID, `SELECT user_id FROM profiles WHERE id=$1`, body.TargetProfileID)
+		if err != nil {
+			http.Error(w, "Target profile not found", http.StatusNotFound)
+			return
+		}
+	}
+
+	user1, user2 := sortUsers(userID, body.TargetUserID)
+	res, err := config.DB.Exec(`DELETE FROM matches WHERE user1_id=$1 AND user2_id=$2`, user1, user2)
+	if err != nil {
+		http.Error(w, "Failed to unmatch", http.StatusInternalServerError)
+		return
+	}
+	rows, _ := res.RowsAffected()
+	if rows == 0 {
+		http.Error(w, "Match not found", http.StatusNotFound)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Write([]byte(`{"status":"unmatched"}`))
+}
