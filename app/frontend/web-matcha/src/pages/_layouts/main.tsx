@@ -10,9 +10,27 @@ import {
 } from 'lucide-react'
 import { ThemeToggle } from '@/components/theme/theme-toggle'
 import { Button } from '@/components/ui/button'
+import { api } from '@/libs/axios'
+import { useNavigate } from 'react-router'
+import { useCallback } from 'react'
 import { RoseMask } from '@/components/rose-mask'
 
 export function MainLayout() {
+	const navigate = useNavigate()
+
+	const handleLogout = useCallback(async () => {
+		const token = localStorage.getItem('accessToken')
+		try {
+			await api.post('/logout', null, {
+				headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+			})
+		} catch {
+			// ignore server error for stateless logout
+		}
+		localStorage.removeItem('accessToken')
+		navigate('/sign-in')
+	}, [navigate])
+
 	return (
 		<div className="h-lvh w-lvw antialiased">
 			<header className="flex h-[8vh] w-full">
@@ -24,7 +42,7 @@ export function MainLayout() {
 
 				<div className="absolute right-0 m-4 flex items-center gap-2">
 					<ThemeToggle />
-					<Button size="icon">
+					<Button size="icon" variant="outline" onClick={handleLogout} title="Logout">
 						<LogOut size={24} />
 					</Button>
 				</div>

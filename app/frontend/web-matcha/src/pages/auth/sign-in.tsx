@@ -8,6 +8,7 @@ import googleLogo from '@/assets/google-logo.svg'
 import { ResetPassword } from './reset-password'
 import { useMutation } from '@tanstack/react-query'
 import { signIn } from '@/api/sign-in'
+import { useNavigate } from 'react-router'
 
 const signInSchema = z.object({
 	email: z.string().email(),
@@ -17,6 +18,7 @@ const signInSchema = z.object({
 type SignInForm = z.infer<typeof signInSchema>
 
 export function SignIn() {
+	const navigate = useNavigate()
 	const {
 		register,
 		handleSubmit,
@@ -31,6 +33,7 @@ export function SignIn() {
 			console.log(data)
 			toast.success('Login successful')
 			localStorage.setItem('accessToken', data.token)
+			navigate('/main')
 		},
 		onError: (error) => {
 			const message = 'Login failed. Please check your credentials.'
