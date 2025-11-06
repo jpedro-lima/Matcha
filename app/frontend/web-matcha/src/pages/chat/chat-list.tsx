@@ -13,7 +13,7 @@ type ChatList = {
 export function ChatList({ chats }: ChatList) {
 	return chats.map(({ full_name, last_message }) => {
 		return (
-			<Card>
+			<Card className="p-3 px-0">
 				<CardContent className="flex gap-4">
 					<Skeleton className="size-12 rounded-full" />
 					<div>

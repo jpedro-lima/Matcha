@@ -1,4 +1,5 @@
 import { ChatList } from './chat-list'
+import { ChatWindow } from './chat-window'
 
 const chats = [
 	{
@@ -76,10 +77,10 @@ const chats = [
 export function Chat() {
 	return (
 		<main className="grid h-full w-full md:grid-cols-[70%_30%]">
-			<section className="flex bg-blue-200">
-				<div className="h-full w-40 self-center bg-amber-200"></div>
+			<section className="flex flex-1 justify-center py-2">
+				<ChatWindow />
 			</section>
-			<section className="sm:bg-muted flex flex-col overflow-scroll p-4">
+			<section className="sm:bg-muted flex flex-col gap-2 overflow-scroll p-4">
 				<ChatList chats={chats} />
 			</section>
 		</main>

@@ -2,7 +2,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import type { CardData } from './notifications'
 import { useState } from 'react'
 import { TitleWithEllipsis } from './title-with-ellipsis'
-import { Timestamp } from './timestamp'
+import { Timestamp } from '../../components/timestamp'
 
 interface NotificationsCardType extends CardData {
 	handleActiveCard: () => void
