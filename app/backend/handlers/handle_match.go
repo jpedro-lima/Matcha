@@ -224,6 +224,7 @@ func ListMatches(w http.ResponseWriter, r *http.Request) {
 		ProfileID   int    `db:"profile_id" json:"profile_id"`
 		Name        string `db:"name" json:"name"`
 		FirstPhoto  string `db:"first_photo" json:"first_photo"`
+		Status      string `db:"status" json:"status"`
 	}
 
 	var items []MatchItem
@@ -233,7 +234,8 @@ func ListMatches(w http.ResponseWriter, r *http.Request) {
 			   CASE WHEN m.user1_id = $1 THEN m.user2_id ELSE m.user1_id END AS other_user_id,
 			   p.id AS profile_id,
 			   (u.first_name || ' ' || u.last_name) AS name,
-			   COALESCE((p.profile_photos::jsonb ->> 0), '') AS first_photo
+			   COALESCE((p.profile_photos::jsonb ->> 0), '') AS first_photo,
+			   m.status
 		FROM matches m
 		JOIN users u ON u.id = CASE WHEN m.user1_id = $1 THEN m.user2_id ELSE m.user1_id END
 		LEFT JOIN profiles p ON p.user_id = u.id
