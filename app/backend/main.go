@@ -44,9 +44,11 @@ func main() {
 	r.Get("/ws", func(w http.ResponseWriter, r *http.Request) {
 		handlers.ChatHandler(w, r)
 	})
+	r.Get("/matches/list", handlers.ListMatches)
 	r.Get("/matches", handlers.GetSuggestedProfile)
 	r.Post("/swipe", handlers.SwipeLike)
 	r.Post("/unmatch", handlers.Unmatch)
+	r.Get("/messages", handlers.GetMessagesHandler)
 	log.Println("Server running on :8080")
 	http.ListenAndServe(":8080", r)
 }

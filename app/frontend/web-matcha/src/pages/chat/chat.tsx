@@ -1,88 +1,72 @@
-import { ChatList } from './chat-list'
+import { useEffect, useState } from 'react'
 import { ChatWindow } from './chat-window'
+import { api } from '@/libs/axios'
 
-const chats = [
-	{
-		id: '1',
-		full_name: 'João Silva',
-		avatar_url: 'https://example.com/avatars/joao.jpg',
-		last_message:
-			"There are many variations of passages of Lorem Ipsum available, but the majority have suffered alteration in some form, by injected humour, or randomised words which don't look even slightly believable. If you are going to use a passage of Lorem Ipsum, you need to be sure there isn't anything embarrassing hidden in the middle of text. ",
-	},
-	{
-		id: '2',
-		full_name: 'Maria Santos',
-		avatar_url: 'https://example.com/avatars/maria.jpg',
-		last_message:
-			"There are many variations of passages of Lorem Ipsum available, but the majority have suffered alteration in some form, by injected humour, or randomised words which don't look even slightly believable. If you are going to use a passage of Lorem Ipsum, you need to be sure there isn't anything embarrassing hidden in the middle of text. ",
-	},
-	{
-		id: '3',
-		full_name: 'Pedro Oliveira',
-		avatar_url: 'https://example.com/avatars/pedro.jpg',
-		last_message:
-			"There are many variations of passages of Lorem Ipsum available, but the majority have suffered alteration in some form, by injected humour, or randomised words which don't look even slightly believable. If you are going to use a passage of Lorem Ipsum, you need to be sure there isn't anything embarrassing hidden in the middle of text. ",
-	},
-	{
-		id: '4',
-		full_name: 'Ana Costa',
-		avatar_url: 'https://example.com/avatars/ana.jpg',
-		last_message:
-			"There are many variations of passages of Lorem Ipsum available, but the majority have suffered alteration in some form, by injected humour, or randomised words which don't look even slightly believable. If you are going to use a passage of Lorem Ipsum, you need to be sure there isn't anything embarrassing hidden in the middle of text. ",
-	},
-	{
-		id: '5',
-		full_name: 'Carlos Pereira',
-		avatar_url: 'https://example.com/avatars/carlos.jpg',
-		last_message:
-			"There are many variations of passages of Lorem Ipsum available, but the majority have suffered alteration in some form, by injected humour, or randomised words which don't look even slightly believable. If you are going to use a passage of Lorem Ipsum, you need to be sure there isn't anything embarrassing hidden in the middle of text. ",
-	},
-	{
-		id: '6',
-		full_name: 'Juliana Rodrigues',
-		avatar_url: 'https://example.com/avatars/juliana.jpg',
-		last_message:
-			"There are many variations of passages of Lorem Ipsum available, but the majority have suffered alteration in some form, by injected humour, or randomised words which don't look even slightly believable. If you are going to use a passage of Lorem Ipsum, you need to be sure there isn't anything embarrassing hidden in the middle of text. ",
-	},
-	{
-		id: '7',
-		full_name: 'Marcos Souza',
-		avatar_url: 'https://example.com/avatars/marcos.jpg',
-		last_message:
-			"There are many variations of passages of Lorem Ipsum available, but the majority have suffered alteration in some form, by injected humour, or randomised words which don't look even slightly believable. If you are going to use a passage of Lorem Ipsum, you need to be sure there isn't anything embarrassing hidden in the middle of text. ",
-	},
-	{
-		id: '8',
-		full_name: 'Fernanda Lima',
-		avatar_url: 'https://example.com/avatars/fernanda.jpg',
-		last_message:
-			"There are many variations of passages of Lorem Ipsum available, but the majority have suffered alteration in some form, by injected humour, or randomised words which don't look even slightly believable. If you are going to use a passage of Lorem Ipsum, you need to be sure there isn't anything embarrassing hidden in the middle of text. ",
-	},
-	{
-		id: '9',
-		full_name: 'Ricardo Alves',
-		avatar_url: 'https://example.com/avatars/ricardo.jpg',
-		last_message:
-			"There are many variations of passages of Lorem Ipsum available, but the majority have suffered alteration in some form, by injected humour, or randomised words which don't look even slightly believable. If you are going to use a passage of Lorem Ipsum, you need to be sure there isn't anything embarrassing hidden in the middle of text. ",
-	},
-	{
-		id: '10',
-		full_name: 'Amanda Ferreira',
-		avatar_url: 'https://example.com/avatars/amanda.jpg',
-		last_message:
-			"There are many variations of passages of Lorem Ipsum available, but the majority have suffered alteration in some form, by injected humour, or randomised words which don't look even slightly believable. If you are going to use a passage of Lorem Ipsum, you need to be sure there isn't anything embarrassing hidden in the middle of text. ",
-	},
-]
+type MatchItem = {
+	match_id: number
+	other_user_id: number
+	name?: string
+	first_photo?: string
+	status: string
+}
 
 export function Chat() {
+	const [matches, setMatches] = useState<MatchItem[]>([])
+	const [loading, setLoading] = useState(false)
+
+	useEffect(() => {
+		const load = async () => {
+			setLoading(true)
+			try {
+				const res = await api.get('/matches/list')
+				setMatches(res.data || [])
+			} catch (e) {
+				console.error('Failed loading matches', e)
+			} finally {
+				setLoading(false)
+			}
+		}
+		load()
+	}, [])
+
+	const selectMatch = (m: MatchItem) => {
+		localStorage.setItem('lastMatchId', String(m.match_id))
+		// notify ChatWindow
+		window.dispatchEvent(new CustomEvent('match-select', { detail: { match_id: m.match_id } }))
+	}
+
 	return (
 		<main className="grid h-full w-full md:grid-cols-[70%_30%]">
 			<section className="flex flex-1 justify-center py-2">
 				<ChatWindow />
 			</section>
-			<section className="sm:bg-muted flex flex-col gap-2 overflow-scroll p-4">
-				<ChatList chats={chats} />
-			</section>
+
+			<aside className="sm:bg-muted flex flex-col gap-2 overflow-auto p-4">
+				{loading ? (
+					<div>Loading...</div>
+				) : matches.filter((m) => m.status === 'accepted').length === 0 ? (
+					<div className="text-sm text-muted-foreground">No matches yet.</div>
+				) : (
+					<ul className="flex flex-col gap-2">
+						{matches
+							.filter((m) => m.status === 'accepted')
+							.map((m) => (
+								<li key={m.match_id}>
+									<button
+										onClick={() => selectMatch(m)}
+										className="flex w-full items-center gap-3 rounded-md px-2 py-2 text-left hover:bg-muted"
+									>
+										<img src={m.first_photo || '/vite.svg'} alt={m.name} className="h-10 w-10 rounded-full object-cover" />
+										<div className="flex flex-col">
+											<span className="font-medium">{m.name || `User ${m.other_user_id}`}</span>
+											<span className="text-xs text-muted-foreground">match #{m.match_id}</span>
+										</div>
+									</button>
+								</li>
+							))}
+					</ul>
+				)}
+			</aside>
 		</main>
 	)
 }

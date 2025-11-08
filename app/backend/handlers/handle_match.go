@@ -209,3 +209,44 @@ func Unmatch(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Write([]byte(`{"status":"unmatched"}`))
 }
+
+// ListMatches returns all matches for the authenticated user with lightweight profile info
+func ListMatches(w http.ResponseWriter, r *http.Request) {
+	userID, err := utils.GetUserIDFromRequest(r)
+	if err != nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	type MatchItem struct {
+		MatchID     int    `db:"id" json:"match_id"`
+		OtherUserID int    `db:"other_user_id" json:"other_user_id"`
+		ProfileID   int    `db:"profile_id" json:"profile_id"`
+		Name        string `db:"name" json:"name"`
+		FirstPhoto  string `db:"first_photo" json:"first_photo"`
+		Status      string `db:"status" json:"status"`
+	}
+
+	var items []MatchItem
+	// Return matched conversations for the user; determine the other user for each row
+	err = config.DB.Select(&items, `
+		SELECT m.id,
+			   CASE WHEN m.user1_id = $1 THEN m.user2_id ELSE m.user1_id END AS other_user_id,
+			   p.id AS profile_id,
+			   (u.first_name || ' ' || u.last_name) AS name,
+			   COALESCE((p.profile_photos::jsonb ->> 0), '') AS first_photo,
+			   m.status
+		FROM matches m
+		JOIN users u ON u.id = CASE WHEN m.user1_id = $1 THEN m.user2_id ELSE m.user1_id END
+		LEFT JOIN profiles p ON p.user_id = u.id
+		WHERE m.user1_id = $1 OR m.user2_id = $1
+		ORDER BY m.last_message_at DESC NULLS LAST, m.matched_at DESC
+	`, userID)
+	if err != nil {
+		http.Error(w, "Failed to list matches: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(items)
+}

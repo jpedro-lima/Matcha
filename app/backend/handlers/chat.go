@@ -1,70 +1,71 @@
 package handlers
 
 import (
-    "encoding/json"
-    "log"
-    "net/http"
-    "strconv"
-    "time"
+	"encoding/json"
+	"log"
+	"net/http"
+	"strconv"
+	"time"
 
-    "github.com/gorilla/websocket"
-    "github.com/jpedro-lima/Matcha/config"
-    "github.com/jpedro-lima/Matcha/models"
+	"github.com/gorilla/websocket"
+	"github.com/jpedro-lima/Matcha/config"
+	"github.com/jpedro-lima/Matcha/models"
+	"github.com/jpedro-lima/Matcha/utils"
 )
 
 type MessageRequest struct {
-    MatchID  int    `json:"match_id"`
-    SenderID int    `json:"sender_id"`
-    Content  string `json:"content"`
+	MatchID  int    `json:"match_id"`
+	SenderID int    `json:"sender_id"`
+	Content  string `json:"content"`
 }
 
 var upgrader = websocket.Upgrader{
-    CheckOrigin: func(r *http.Request) bool {
-        return true // Adjust origin validation as needed
-    },
+	CheckOrigin: func(r *http.Request) bool {
+		return true // Adjust origin validation as needed
+	},
 }
 
 var matchConnections = make(map[int][]*websocket.Conn)
 
 func ChatHandler(w http.ResponseWriter, r *http.Request) {
-    conn, err := upgrader.Upgrade(w, r, nil)
-    if err != nil {
-        http.Error(w, "WebSocket upgrade failed", http.StatusInternalServerError)
-        return
-    }
-    defer conn.Close()
+	conn, err := upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		http.Error(w, "WebSocket upgrade failed", http.StatusInternalServerError)
+		return
+	}
+	defer conn.Close()
 
-    matchIDStr := r.URL.Query().Get("match_id")
-    matchID, _ := strconv.Atoi(matchIDStr)
-    matchConnections[matchID] = append(matchConnections[matchID], conn)
+	matchIDStr := r.URL.Query().Get("match_id")
+	matchID, _ := strconv.Atoi(matchIDStr)
+	matchConnections[matchID] = append(matchConnections[matchID], conn)
 
-    defer func() {
-        conns := matchConnections[matchID]
-        updated := []*websocket.Conn{}
-        for _, c := range conns {
-            if c != conn {
-                updated = append(updated, c)
-            }
-        }
-        matchConnections[matchID] = updated
-    }()
+	defer func() {
+		conns := matchConnections[matchID]
+		updated := []*websocket.Conn{}
+		for _, c := range conns {
+			if c != conn {
+				updated = append(updated, c)
+			}
+		}
+		matchConnections[matchID] = updated
+	}()
 
-    for {
-        _, msgData, err := conn.ReadMessage()
-        if err != nil {
-            log.Println("WebSocket read error:", err)
-            break
-        }
+	for {
+		_, msgData, err := conn.ReadMessage()
+		if err != nil {
+			log.Println("WebSocket read error:", err)
+			break
+		}
 
-        var msg MessageRequest
-        if err := json.Unmarshal(msgData, &msg); err != nil {
-            log.Println("Invalid message payload:", err)
-            continue
-        }
+		var msg MessageRequest
+		if err := json.Unmarshal(msgData, &msg); err != nil {
+			log.Println("Invalid message payload:", err)
+			continue
+		}
 
-        // Validate sender access to match
-        var exists bool
-        err = config.DB.Get(&exists, `
+		// Validate sender access to match
+		var exists bool
+		err = config.DB.Get(&exists, `
             SELECT EXISTS (
                 SELECT 1 FROM matches
                 WHERE id = $1
@@ -73,40 +74,87 @@ func ChatHandler(w http.ResponseWriter, r *http.Request) {
             )
         `, msg.MatchID, msg.SenderID)
 
-        if err != nil || !exists {
-            log.Println("Unauthorized sender or invalid match")
-            continue
-        }
+		if err != nil || !exists {
+			log.Println("Unauthorized sender or invalid match")
+			continue
+		}
 
-        saved := models.Message{
-            MatchID:   msg.MatchID,
-            SenderID:  msg.SenderID,
-            Content:   msg.Content,
-            SentAt:    time.Now().Format(time.RFC3339),
-            Read:      false,
-        }
+		saved := models.Message{
+			MatchID:  msg.MatchID,
+			SenderID: msg.SenderID,
+			Content:  msg.Content,
+			SentAt:   time.Now().Format(time.RFC3339),
+			Read:     false,
+		}
 
-        _, err = config.DB.Exec(`
+		_, err = config.DB.Exec(`
             INSERT INTO messages (match_id, sender_id, content, sent_at, read)
             VALUES ($1, $2, $3, $4, $5)
         `, saved.MatchID, saved.SenderID, saved.Content, saved.SentAt, saved.Read)
 
-        if err != nil {
-            log.Println("Failed to store message:", err)
-            continue
-        }
+		if err != nil {
+			log.Println("Failed to store message:", err)
+			continue
+		}
 
-        payload, _ := json.Marshal(saved)
-        broadcastToMatch(saved.MatchID, payload)
-    }
+		payload, _ := json.Marshal(saved)
+		broadcastToMatch(saved.MatchID, payload)
+	}
 }
 
 func broadcastToMatch(matchID int, data []byte) {
-    conns := matchConnections[matchID]
-    for _, c := range conns {
-        err := c.WriteMessage(websocket.TextMessage, data)
-        if err != nil {
-            log.Println("Broadcast error:", err)
-        }
-    }
+	conns := matchConnections[matchID]
+	for _, c := range conns {
+		err := c.WriteMessage(websocket.TextMessage, data)
+		if err != nil {
+			log.Println("Broadcast error:", err)
+		}
+	}
+}
+
+func GetMessagesHandler(w http.ResponseWriter, r *http.Request) {
+	userID, err := utils.GetUserIDFromRequest(r)
+	if err != nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	matchIDStr := r.URL.Query().Get("match_id")
+	matchID, err := strconv.Atoi(matchIDStr)
+	if err != nil {
+		http.Error(w, "Invalid match_id", http.StatusBadRequest)
+		return
+	}
+
+	// Check if user is part of the match
+	var exists bool
+	err = config.DB.Get(&exists, `
+        SELECT EXISTS (
+            SELECT 1 FROM matches
+            WHERE id = $1
+            AND (user1_id = $2 OR user2_id = $2)
+            AND status = 'accepted'
+        )
+    `, matchID, userID)
+	if err != nil || !exists {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+
+	var messages []models.Message
+	err = config.DB.Select(&messages, `
+        SELECT id, match_id, sender_id, content, sent_at, read,
+               COALESCE(attachment_url, '') as attachment_url,
+               COALESCE(attachment_type, '') as attachment_type
+        FROM messages
+        WHERE match_id = $1
+        ORDER BY sent_at ASC
+    `, matchID)
+	if err != nil {
+		http.Error(w, "Failed to fetch messages", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(messages)
 }
