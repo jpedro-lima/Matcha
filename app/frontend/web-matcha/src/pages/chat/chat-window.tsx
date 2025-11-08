@@ -18,14 +18,6 @@ interface ApiMessage {
 	sent_at: string
 }
 
-type MatchItem = {
-	match_id: number
-	other_user_id: number
-	profile_id?: number
-	name?: string
-	first_photo?: string
-}
-
 export function ChatWindow() {
 	const [matchId, setMatchId] = useState<number | null>(null)
 	const [senderId, setSenderId] = useState<number | null>(null)
@@ -33,8 +25,6 @@ export function ChatWindow() {
 	const [messages, setMessages] = useState<Message[]>([])
 	const [messageInput, setMessageInput] = useState('')
 	const wsRef = useRef<WebSocket | null>(null)
-	const [matches, setMatches] = useState<MatchItem[]>([])
-	const [loadingMatches, setLoadingMatches] = useState(false)
 
 	// parse JWT from localStorage to extract user_id (sender)
 	const parseJwt = (token: string | null) => {
@@ -73,7 +63,7 @@ export function ChatWindow() {
 				{
 					sender_id: msg.sender_id,
 					content: msg.content,
-					timestamp: new Date(msg.sent_at),
+					timestamp: new Date(msg.sent_at.replace(' ', 'T')),
 				},
 			])
 		}
@@ -83,6 +73,24 @@ export function ChatWindow() {
 		}
 		wsRef.current = ws
 	}, [matchId])
+
+	const loadMessagesAndConnect = useCallback(async (mId: number) => {
+		setMatchId(mId)
+		setMessages([])
+		try {
+			const res = await api.get(`/messages?match_id=${mId}`)
+			const fetchedMessages = res.data.map((msg: ApiMessage) => ({
+				sender_id: msg.sender_id,
+				content: msg.content,
+				timestamp: new Date(msg.sent_at.replace(' ', 'T')),
+			}))
+			setMessages(fetchedMessages)
+		} catch (e) {
+			console.error('Failed to load messages', e)
+		}
+		// connect websocket after loading history
+		connect()
+	}, [connect])
 
 	const sendMessage = () => {
 		if (!wsRef.current || !isConnected || !messageInput.trim()) return
@@ -97,171 +105,72 @@ export function ChatWindow() {
 	}
 
 	useEffect(() => {
-
-		// load current user id and matches
+		// set sender id from token
 		const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null
 		const payload = parseJwt(token)
 		if (payload && payload.user_id) {
 			setSenderId(Number(payload.user_id))
 		}
 
-		const loadMatches = async () => {
-			setLoadingMatches(true)
-			try {
-				const res = await api.get('/matches/list')
-				setMatches(res.data || [])
-				// Auto-select last match if exists, else first match
-				const lastMatchId = localStorage.getItem('lastMatchId')
-				let selectedMatch = null
-				if (lastMatchId) {
-					selectedMatch = res.data.find((m: MatchItem) => m.match_id == Number(lastMatchId))
-				}
-				if (!selectedMatch && res.data.length > 0) {
-					selectedMatch = res.data[0]
-					localStorage.setItem('lastMatchId', String(selectedMatch.match_id))
-				}
-				if (selectedMatch) {
-					setMatchId(selectedMatch.match_id)
-					// fetch messages
-					try {
-						const msgRes = await api.get(`/messages?match_id=${selectedMatch.match_id}`)
-						const fetchedMessages = msgRes.data.map((msg: ApiMessage) => ({
-							sender_id: msg.sender_id,
-							content: msg.content,
-							timestamp: new Date(msg.sent_at.replace(' ', 'T')),
-						}))
-						setMessages(fetchedMessages)
-					} catch (e) {
-						console.error('Failed to load messages', e)
-					}
-					// connect
-					connect()
-				}
-			} catch (e) {
-				console.error('Failed to load matches', e)
-			} finally {
-				setLoadingMatches(false)
-			}
+		// If there is a last selected match in storage, load it
+		const lastMatchId = localStorage.getItem('lastMatchId')
+		if (lastMatchId) {
+			loadMessagesAndConnect(Number(lastMatchId))
 		}
-		loadMatches()
 
-		return () => {
-			if (wsRef.current) {
-				wsRef.current.close()
-			}
+		// Listen for match selection events dispatched by parent (chat.tsx)
+		const handler = (e: Event) => {
+			const detail = (e as CustomEvent)?.detail
+			if (!detail || !detail.match_id) return
+			const selectedId = Number(detail.match_id)
+			loadMessagesAndConnect(selectedId)
 		}
-	}, [connect])
+
+		window.addEventListener('match-select', handler as EventListener)
+		return () => {
+			if (wsRef.current) wsRef.current.close()
+			window.removeEventListener('match-select', handler as EventListener)
+		}
+	}, [connect, loadMessagesAndConnect])
 
 	return (
 		<main className="bg-muted/80 mx-12 flex size-full flex-col gap-2 rounded-t-3xl rounded-r-3xl">
-			<header className="flex items-center gap-3 p-4">
-				<Skeleton className="size-12 rounded-full" />
-				<p className="text-foreground font-markazi text-2xl">Chat</p>
-			</header>
-			<div className="flex h-[72vh]">
-				{/* Left: matches list */}
-				<aside className="w-72 border-r px-2 py-3 overflow-auto">
-					{loadingMatches ? (
-						<p>Loading...</p>
-					) : matches.length === 0 ? (
-						<p className="text-sm text-muted-foreground">No matches yet.</p>
-					) : (
-						<ul className="flex flex-col gap-2">
-							{matches.map((m) => (
-								<li key={m.match_id}>
-									<button
-										onClick={async () => {
-											setMatchId(m.match_id)
-											localStorage.setItem('lastMatchId', String(m.match_id))
-											// ensure sender is current user (already set from token)
-											const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null
-											const p = parseJwt(token)
-											if (p && p.user_id) setSenderId(Number(p.user_id))
-											// clear messages
-											setMessages([])
-											// fetch existing messages
-											try {
-												const res = await api.get(`/messages?match_id=${m.match_id}`)
-												const fetchedMessages = res.data.map((msg: ApiMessage) => ({
-													sender_id: msg.sender_id,
-													content: msg.content,
-													timestamp: new Date(msg.sent_at.replace(' ', 'T')),
-												}))
-												setMessages(fetchedMessages)
-											} catch (e) {
-												console.error('Failed to load messages', e)
-											}
-											// connect
-											connect()
-										}}
-										className="flex w-full items-center gap-3 rounded-md px-2 py-2 text-left hover:bg-muted"
-									>
-										<img src={m.first_photo || '/vite.svg'} alt={m.name} className="h-10 w-10 rounded-full object-cover" />
-										<div className="flex flex-col">
-											<span className="font-medium">{m.name || `User ${m.other_user_id}`}</span>
-											<span className="text-xs text-muted-foreground">match #{m.match_id}</span>
-										</div>
-									</button>
-								</li>
-							))}
-						</ul>
-					)}
-				</aside>
+			<header className="flex w-full flex-col gap-3 p-4">
+				<div className="flex items-center gap-3">
+					<Skeleton className="size-12 rounded-full" />
+					<p className="text-foreground font-markazi text-2xl">Chat</p>
+				</div>
+				<div className="border-muted-foreground w-full self-center overflow-scroll border-b" />
+				</header>
 
-				{/* Right: chat area */}
-				<section className="flex-1 flex flex-col">
-					<div className="border-b p-3">
-						<div className="flex items-center gap-4">
-							<div>
-								<label className="text-sm">Match ID</label>
-								<div className="font-mono">{matchId ?? '-'}</div>
-							</div>
-							<div>
-								<label className="text-sm">You (sender)</label>
-								<div className="font-mono">{senderId ?? '-'}</div>
-							</div>
-						</div>
-					</div>
-					<div className="flex-1 overflow-auto p-4">
-						{messages.map((msg, index) => (
-							<ChatMessage
-								key={index}
-								text={msg.content}
-								variant={msg.sender_id === senderId ? 'right' : 'left'}
-								timestamp={msg.timestamp}
-							/>
-						))}
-					</div>
-					<footer className="px-2 py-3">
-						<div className="dark:bg-muted bg-background flex w-full items-center rounded-full px-3 py-1">
-							<Button className="rounded-full border-0" variant="outline" size="icon">
-								<Mic className="text-primary size-5" />
-							</Button>
-							<Textarea
-								value={messageInput}
-								onChange={(e) => setMessageInput(e.target.value)}
-								onKeyDown={(e) => {
-									if (e.key === 'Enter' && !e.shiftKey) {
-										e.preventDefault()
-										sendMessage()
-									}
-								}}
-								className="h-auto max-h-12 min-h-10 resize-none border-0 shadow-none dark:bg-transparent"
-								placeholder="Type a message..."
-							/>
-							<Button
-								onClick={sendMessage}
-								className="rounded-full border-0"
-								variant="outline"
-								size="icon"
-								disabled={!isConnected}
-							>
-								<SendHorizonal className="text-primary size-5" />
-							</Button>
-						</div>
-					</footer>
-				</section>
-			</div>
+			<section className="flex h-[66vh] flex-col gap-2 overflow-auto px-4">
+				{messages.map((m, i) => (
+					<ChatMessage key={i} text={m.content} variant={m.sender_id === senderId ? 'right' : 'left'} timestamp={m.timestamp} />
+				))}
+			</section>
+
+			<footer className="px-2">
+				<div className="dark:bg-muted bg-background flex w-full items-center rounded-full px-3 py-1">
+					<Button className="rounded-full border-0" variant="outline" size="icon">
+						<Mic className="text-primary size-5" />
+					</Button>
+					<Textarea
+						value={messageInput}
+						onChange={(e) => setMessageInput(e.target.value)}
+						onKeyDown={(e) => {
+							if (e.key === 'Enter' && !e.shiftKey) {
+								e.preventDefault()
+								sendMessage()
+							}
+						}}
+						className="h-auto max-h-12 min-h-10 resize-none border-0 shadow-none dark:bg-transparent"
+						placeholder="Type a message..."
+					/>
+					<Button onClick={sendMessage} className="rounded-full border-0" variant="outline" size="icon" disabled={!isConnected}>
+						<SendHorizonal className="text-primary size-5" />
+					</Button>
+				</div>
+			</footer>
 		</main>
 	)
 }
