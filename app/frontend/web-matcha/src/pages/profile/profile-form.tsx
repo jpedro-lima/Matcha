@@ -12,6 +12,8 @@ import { FormHoverCardTags } from './form-hover-card-tags'
 import { toast } from 'sonner'
 import { useMutation } from '@tanstack/react-query'
 import { createProfile, type ProfilePayload } from '@/api/create-profile'
+import { useQuery } from '@tanstack/react-query'
+import { getMyProfile } from '@/api/get-profile'
 
 const gender = ['male', 'female', 'non-binary']
 
@@ -91,6 +93,8 @@ export function ProfileForm() {
 	const [selectedTags, setSelectedTags] = useState<string[]>([])
 	const token = localStorage.getItem('accessToken') || '' // JWT stored after login
 
+    const { data: myProfile } = useQuery({ queryKey: ['myProfile'], queryFn: getMyProfile, staleTime: 1000 * 60 })
+
 	// Inline mutation
 	const mutation = useMutation({
 		mutationFn: (payload: ProfilePayload) => createProfile(payload, token),
@@ -131,7 +135,9 @@ export function ProfileForm() {
 	}
 
 	function handleProfileForm(data: ProfileFormType) {
-		mutation.mutate({
+		// Use profile photos already uploaded (from GET /profiles/me) if available
+		const photos = myProfile?.profile?.profile_photos ?? []
+		const payload: ProfilePayload = {
 			bio: data.bio,
 			gender: data.gender,
 			preferred_gender: data.preferenceGender,
@@ -143,11 +149,10 @@ export function ProfileForm() {
 				relationship_type: 'long-term',
 				interests: ['outdoor activities', 'tech'],
 			},
-			profile_photos: [
-				'https://example.com/photo1.jpg',
-				'https://example.com/photo2.jpg',
-			],
-		})
+			profile_photos: photos,
+		}
+
+		mutation.mutate(payload)
 	}
 
 	const checkErrorsForm = () => {
