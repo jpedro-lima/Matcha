@@ -20,6 +20,7 @@ interface ApiMessage {
 
 export function ChatWindow() {
 	const [matchId, setMatchId] = useState<number | null>(null)
+	const [otherUserId, setOtherUserId] = useState<number | null>(null)
 	const [senderId, setSenderId] = useState<number | null>(null)
 	const [isConnected, setIsConnected] = useState(false)
 	const [messages, setMessages] = useState<Message[]>([])
@@ -124,6 +125,7 @@ export function ChatWindow() {
 			if (!detail || !detail.match_id) return
 			const selectedId = Number(detail.match_id)
 			loadMessagesAndConnect(selectedId)
+			if (detail.other_user_id) setOtherUserId(Number(detail.other_user_id))
 		}
 
 		window.addEventListener('match-select', handler as EventListener)
@@ -133,12 +135,42 @@ export function ChatWindow() {
 		}
 	}, [connect, loadMessagesAndConnect])
 
+	// moderation actions
+	const handleBlock = async () => {
+		if (!otherUserId) return
+		try {
+			await (await import('@/api/block')).blockUser(otherUserId)
+			// remove conversation from UI; simple approach: reload
+			window.location.reload()
+		} catch (e) {
+			console.error('Failed to block user', e)
+		}
+	}
+
+	const handleReport = async () => {
+		if (!otherUserId) return
+		const reason = prompt('Report reason (e.g. Sexual harassment, Bad behaviour, Spam):', 'Bad behaviour')
+		if (!reason) return
+		try {
+			await (await import('@/api/report')).reportUser(otherUserId, reason)
+			alert('Report submitted')
+			window.location.reload()
+		} catch (e) {
+			console.error('Failed to report user', e)
+			alert('Could not submit report')
+		}
+	}
+
 	return (
 		<main className="bg-muted/80 mx-12 flex size-full flex-col gap-2 rounded-t-3xl rounded-r-3xl">
 			<header className="flex w-full flex-col gap-3 p-4">
 				<div className="flex items-center gap-3">
 					<Skeleton className="size-12 rounded-full" />
 					<p className="text-foreground font-markazi text-2xl">Chat</p>
+					<div className="ml-auto flex gap-2">
+						<button onClick={handleReport} className="rounded-md bg-amber-500 px-3 py-1 text-sm text-white">Report</button>
+						<button onClick={handleBlock} className="rounded-md bg-rose-600 px-3 py-1 text-sm text-white">Block</button>
+					</div>
 				</div>
 				<div className="border-muted-foreground w-full self-center overflow-scroll border-b" />
 				</header>

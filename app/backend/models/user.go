@@ -10,6 +10,7 @@ type User struct {
     CreatedAt             string `json:"created_at" db:"created_at"`
     UpdatedAt             string `json:"updated_at" db:"updated_at"`
     Confirmed             bool      `json:"confirmed" db:"confirmed"`
+    Banned                bool      `json:"banned" db:"banned"`
     ConfirmationToken     string    `json:"confirmation_token" db:"confirmation_token"`
     ConfirmationExpiresAt string `json:"confirmation_expires_at" db:"confirmation_expires_at"`
 }

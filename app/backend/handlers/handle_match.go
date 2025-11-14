@@ -60,10 +60,14 @@ func GetSuggestedProfile(w http.ResponseWriter, r *http.Request) {
                COALESCE((p.profile_photos::jsonb ->> 0), '') AS first_photo
         FROM profiles p
         WHERE p.user_id != $1
-          AND $2 = ANY(p.preferred_gender) -- user is preferred by candidate
-          AND p.gender = ANY($3)           -- candidate's gender matches user's preference
+		  AND $2 = ANY(p.preferred_gender) -- user is preferred by candidate
+		  AND p.gender = ANY($3)           -- candidate's gender matches user's preference
           AND p.birth_date BETWEEN $4 AND $5
-          AND ST_Distance(p.location, ST_GeogFromText($6)) <= $7 * 1000
+		  AND ST_Distance(p.location, ST_GeogFromText($6)) <= $7 * 1000
+		  -- exclude users blocked by or who blocked current user
+		  AND NOT EXISTS (
+			  SELECT 1 FROM blocks b WHERE (b.blocker_id = $1 AND b.blocked_id = p.user_id) OR (b.blocker_id = p.user_id AND b.blocked_id = $1)
+		  )
         ORDER BY p.last_active DESC
         LIMIT 10
     `, userID, userProfile.Gender, pq.Array(userProfile.PreferredGender),
@@ -239,7 +243,11 @@ func ListMatches(w http.ResponseWriter, r *http.Request) {
 		FROM matches m
 		JOIN users u ON u.id = CASE WHEN m.user1_id = $1 THEN m.user2_id ELSE m.user1_id END
 		LEFT JOIN profiles p ON p.user_id = u.id
-		WHERE m.user1_id = $1 OR m.user2_id = $1
+		WHERE (m.user1_id = $1 OR m.user2_id = $1)
+		  -- exclude matches where either party has blocked the other
+		  AND NOT EXISTS (
+			  SELECT 1 FROM blocks b WHERE (b.blocker_id = m.user1_id AND b.blocked_id = m.user2_id) OR (b.blocker_id = m.user2_id AND b.blocked_id = m.user1_id)
+		  )
 		ORDER BY m.last_message_at DESC NULLS LAST, m.matched_at DESC
 	`, userID)
 	if err != nil {

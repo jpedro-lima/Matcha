@@ -32,7 +32,7 @@ export function Chat() {
 	const selectMatch = (m: MatchItem) => {
 		localStorage.setItem('lastMatchId', String(m.match_id))
 		// notify ChatWindow
-		window.dispatchEvent(new CustomEvent('match-select', { detail: { match_id: m.match_id } }))
+		window.dispatchEvent(new CustomEvent('match-select', { detail: { match_id: m.match_id, other_user_id: m.other_user_id } }))
 	}
 
 	return (
