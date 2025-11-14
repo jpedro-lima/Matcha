@@ -34,6 +34,8 @@ func main() {
 	r.Post("/login", handlers.Login)
 	r.Post("/logout", handlers.Logout)
 	r.Post("/profiles", handlers.CreateProfile)
+	r.Get("/profiles/me", handlers.GetMyProfile)
+	r.Post("/profiles/photos", handlers.UploadProfilePhotos)
 	r.Patch("/update_password", handlers.UpdatePassword)
 	r.Put("/profiles/{id}", handlers.UpdateProfile)
 	r.Delete("/profiles/{id}", handlers.DeleteProfile)
@@ -49,6 +51,8 @@ func main() {
 	r.Post("/swipe", handlers.SwipeLike)
 	r.Post("/unmatch", handlers.Unmatch)
 	r.Get("/messages", handlers.GetMessagesHandler)
+	// serve static assets (uploads)
+	r.Handle("/static/*", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
 	log.Println("Server running on :8080")
 	http.ListenAndServe(":8080", r)
 }

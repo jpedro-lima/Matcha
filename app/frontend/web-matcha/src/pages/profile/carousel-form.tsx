@@ -6,19 +6,10 @@ import { z } from 'zod'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { CarouselImages } from '@/components/carousel-images'
-
-import pretty from '@/_images/pretty-woman.jpg'
-import photo from '@/_images/horizontal-photo.webp'
-import woman from '@/_images/woman-peb.jpg'
-
-const images = [
-	{ url: pretty, size: 'sm:h-[500px]' },
-	{ url: photo, size: '' },
-	{ url: woman, size: 'sm:h-[500px]' },
-	{ url: pretty, size: 'sm:h-[500px]' },
-	{ url: photo, size: '' },
-	{ url: woman, size: 'sm:h-[500px]' },
-]
+import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query'
+import { uploadProfilePhotos } from '@/api/upload-image'
+import { getMyProfile } from '@/api/get-profile'
+import { env } from '@/env'
 
 const formImagesInputSchema = z.object({
 	images: z
@@ -31,12 +22,21 @@ const formImagesInputSchema = z.object({
 type FormImagesInput = z.infer<typeof formImagesInputSchema>
 
 export function CarouselForm() {
+	const qc = useQueryClient()
+	const { data } = useQuery({ queryKey: ['myProfile'], queryFn: getMyProfile, staleTime: 1000 * 60 })
+
+	type MyProfileCache = { profile?: { profile_photos?: string[] } & Record<string, unknown> } & Record<string, unknown>
+
+	const profilePhotos: { url: string; size: string }[] = (data?.profile?.profile_photos || []).map((u: string) => {
+		const url = typeof u === 'string' && u.startsWith('/') ? `${env.VITE_API_URL.replace(/\/$/, '')}${u}` : u
+		return { url, size: 'sm:h-[500px]' }
+	})
+
 	const {
 		handleSubmit,
 		reset,
-		watch,
 		register,
-		formState: { isSubmitting, errors },
+		formState: { isSubmitting },
 	} = useForm<FormImagesInput>({
 		resolver: zodResolver(formImagesInputSchema),
 		defaultValues: {
@@ -44,34 +44,37 @@ export function CarouselForm() {
 		},
 	})
 
-	const selectedFiles = watch('images')
 
-	async function onSubmit(values: FormImagesInput) {
-		try {
-			const formData = new FormData()
-			Array.from(values.images).forEach((file) => {
-				formData.append('images', file)
-			})
-
-			// Simulação de upload (substituir por API)
-			await new Promise((resolve) => setTimeout(resolve, 1500))
-
-			toast.success('Upload complete!', {
-				description: `${values.images.length} image(s) successfully sent.`,
+	const mutation = useMutation({
+		mutationFn: (files: FileList) => uploadProfilePhotos(files),
+		onSuccess: (data) => {
+			// data should contain { profile_photos: string[] }
+			toast.success('Upload complete!')
+			// update cache immediately so ProfileForm sees new URLs
+			qc.setQueryData(['myProfile'], (old: unknown) => {
+				const o = (old as MyProfileCache) || { profile: {} }
+				const next: MyProfileCache = { ...(o as MyProfileCache) }
+				next.profile = next.profile ? { ...next.profile } : {}
+				if (data && data.profile_photos) {
+					next.profile.profile_photos = data.profile_photos
+				}
+				return next
 			})
 			reset()
-		} catch {
-			console.error(errors.images?.message)
-			toast.error('Upload Error', {
-				description: 'An error occurred while sending the images.',
-			})
-		}
-		console.log(selectedFiles)
+		},
+		onError: () => {
+			toast.error('Upload Error')
+		},
+	})
+
+	async function onSubmit(values: FormImagesInput) {
+		if (!values.images) return
+		mutation.mutate(values.images)
 	}
 
 	return (
 		<section className="mt-5">
-			<CarouselImages images={images} />
+			<CarouselImages images={profilePhotos.length ? profilePhotos : [{ url: '/_images/pretty-woman.jpg', size: 'sm:h-[500px]' }]} />
 
 			<form
 				action=""
@@ -86,7 +89,7 @@ export function CarouselForm() {
 					{...register('images')}
 				/>
 
-				<Button className="rounded-l-none" type="submit" disabled={isSubmitting}>
+				<Button className="rounded-l-none" type="submit" disabled={isSubmitting || mutation.status === 'pending'}>
 					<Upload size={32} className="size-6 text-neutral-100" />
 				</Button>
 			</form>
