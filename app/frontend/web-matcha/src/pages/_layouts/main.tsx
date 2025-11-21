@@ -14,9 +14,19 @@ import { api } from '@/libs/axios'
 import { useNavigate } from 'react-router'
 import { useCallback } from 'react'
 import { RoseMask } from '@/components/rose-mask'
+import { useQuery } from '@tanstack/react-query'
+import { getNotifications } from '@/api/notifications'
 
 export function MainLayout() {
 	const navigate = useNavigate()
+
+	const { data: notifications } = useQuery({
+		queryKey: ['notifications'],
+		queryFn: getNotifications,
+		refetchInterval: 5000,
+	})
+
+	const hasUnread = notifications?.some((n) => !n.read)
 
 	const handleLogout = useCallback(async () => {
 		const token = localStorage.getItem('accessToken')
@@ -58,7 +68,12 @@ export function MainLayout() {
 						to="/notifications"
 						className={({ isActive }) => (isActive ? 'text-rose-700' : '')}
 					>
-						<CircleAlert size={30} />
+						<div className="relative">
+							<CircleAlert size={30} />
+							{hasUnread && (
+								<span className="absolute top-0 right-0 block h-3 w-3 rounded-full bg-red-600 ring-2 ring-white" />
+							)}
+						</div>
 					</NavLink>
 
 					<NavLink
