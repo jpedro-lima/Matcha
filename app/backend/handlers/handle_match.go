@@ -133,6 +133,10 @@ func SwipeLike(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Failed to create match", http.StatusInternalServerError)
 			return
 		}
+
+		// Notify target user about the like
+		CreateNotification(targetUserID, &userID, "like", "Someone liked your profile")
+
 		w.WriteHeader(http.StatusCreated)
 		w.Write([]byte(`{"status":"match created"}`))
 		return
@@ -151,6 +155,11 @@ func SwipeLike(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Failed to update match to accepted", http.StatusInternalServerError)
 			return
 		}
+
+		// Notify both users about the match
+		CreateNotification(targetUserID, &userID, "match", "You have a new match!")
+		CreateNotification(userID, &targetUserID, "match", "You have a new match!")
+
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(`{"status":"match updated to accepted"}`))
 		return
@@ -210,6 +219,10 @@ func Unmatch(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Match not found", http.StatusNotFound)
 		return
 	}
+
+	// Notify target user about the unlike
+	CreateNotification(body.TargetUserID, &userID, "unlike", "Someone unliked you")
+
 	w.Header().Set("Content-Type", "application/json")
 	w.Write([]byte(`{"status":"unmatched"}`))
 }

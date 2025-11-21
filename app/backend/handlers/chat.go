@@ -97,6 +97,17 @@ func ChatHandler(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
+		// Find recipient and create notification
+		var recipientID int
+		err = config.DB.Get(&recipientID, `
+			SELECT CASE WHEN user1_id = $1 THEN user2_id ELSE user1_id END
+			FROM matches WHERE id = $2
+		`, msg.SenderID, msg.MatchID)
+
+		if err == nil {
+			CreateNotification(recipientID, &msg.SenderID, "message", "You received a new message")
+		}
+
 		payload, _ := json.Marshal(saved)
 		broadcastToMatch(saved.MatchID, payload)
 	}
