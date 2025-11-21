@@ -444,3 +444,38 @@ func (n *sqlNullString) Scan(value interface{}) error {
 	}
 	return nil
 }
+
+func GetProfile(w http.ResponseWriter, r *http.Request) {
+	userID, err := utils.GetUserIDFromRequest(r)
+	if err != nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	targetIDStr := chi.URLParam(r, "id")
+	targetID, err := strconv.Atoi(targetIDStr)
+	if err != nil {
+		http.Error(w, "Invalid profile ID", http.StatusBadRequest)
+		return
+	}
+
+	var profile models.Profile
+	// Use ST_AsText for location to avoid binary output issues if it's geometry
+	err = config.DB.Get(&profile, `
+		SELECT id, user_id, bio, gender, preferred_gender, birth_date, search_radius, tags,
+		ST_AsText(location) as location, attributes, looking_for, profile_photos, last_active, created_at, updated_at
+		FROM profiles WHERE id = $1
+	`, targetID)
+	if err != nil {
+		http.Error(w, "Profile not found", http.StatusNotFound)
+		return
+	}
+
+	// Trigger notification if viewing someone else's profile
+	if profile.UserID != userID {
+		CreateNotification(profile.UserID, &userID, "view", "Someone viewed your profile")
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(profile)
+}
