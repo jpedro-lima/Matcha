@@ -4,6 +4,7 @@ export interface Notification {
   id: number
   user_id: number
   sender_id?: number
+  sender_name?: string
   type: string
   content: string
   read: boolean

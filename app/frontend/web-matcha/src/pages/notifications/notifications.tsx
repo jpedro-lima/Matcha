@@ -39,7 +39,7 @@ export function Notifications() {
 		title: n.type.charAt(0).toUpperCase() + n.type.slice(1),
 		content: n.content,
 		timestamp: new Date(n.created_at),
-		sendBy: 'System'
+		sendBy: n.sender_name || 'System'
 	}))
 
 	return (
