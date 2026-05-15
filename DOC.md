@@ -53,43 +53,57 @@ API REST + WebSocket para um app de relacionamento. Suporta cadastro com verific
 
 ## 3. Estrutura do Projeto
 
+O projeto é um monorepo onde a API e o frontend ficam sob `app/`. A raiz contém apenas orquestração (compose, Makefile, env, nginx).
+
 ```
 matcha/
 ├── docker-compose.yml
-├── .env
+├── Makefile                      # alvos `up`, `down`, `health`, `regen-certs`...
+├── .env                          # única fonte de envs (não vai pro git)
+├── .env.example
 ├── nginx/
+│   ├── Dockerfile                # imagem custom: nginx + openssl + entrypoint
 │   ├── nginx.conf
-│   └── certs/
-│       ├── server.crt
-│       └── server.key
-├── api/
-│   ├── Dockerfile
-│   ├── package.json
-│   ├── database/
-│   │   ├── knexfile.ts
-│   │   ├── migrations/
-│   │   └── seeds/
-│   └── src/
-│       ├── server.ts
-│       ├── app.ts
-│       ├── config/
-│       ├── middlewares/
-│       ├── routes/
-│       ├── controllers/
-│       ├── services/
-│       ├── models/
-│       ├── sockets/
-│       ├── utils/
-│       └── validators/
-└── frontend-web/
-    └── (já existente)
+│   └── gen-certs.sh              # roda dentro do container, na primeira subida
+└── app/
+    ├── api/
+    │   ├── Dockerfile            # multi-stage: tsc → node:20-alpine runtime
+    │   ├── package.json          # "type": "module"
+    │   ├── tsconfig.json         # module/moduleResolution: nodenext
+    │   └── src/
+    │       ├── server.ts             # apenas listener + graceful shutdown
+    │       ├── app.ts                # composição Express (a partir da Fase 3)
+    │       ├── config/               # env, db, knex config
+    │       ├── database/
+    │       │   ├── knexfile.ts
+    │       │   ├── migrations/
+    │       │   └── seeds/
+    │       ├── middlewares/
+    │       ├── routes/
+    │       ├── controllers/          # apenas HTTP — não toca Knex
+    │       ├── services/             # regra de negócio + acesso a dados
+    │       ├── models/
+    │       ├── sockets/
+    │       ├── utils/
+    │       └── validators/
+    └── frontend-web/             # React + Vite + TS (pré-existente)
 ```
+
+> **Stack runtime:** Node 20 + TypeScript em ESM nativo (`"type": "module"` + `module: "nodenext"`). Imports relativos exigem extensão `.js` mesmo em arquivos `.ts`. Certificados TLS vivem no volume nomeado `matcha_certs` — nada de cert no filesystem do host.
 
 ---
 
 ## 4. Variáveis de Ambiente
 
-Arquivo `.env` na raiz:
+**Arquivo único `.env` na raiz** — fonte de verdade para os três consumidores:
+
+| Consumidor | Como lê |
+| --- | --- |
+| Docker Compose | interpolação automática de `${...}` em `docker-compose.yml`; `env_file: .env` injeta no container da API |
+| API em dev (`npm run dev`) | `tsx watch --env-file=../../.env src/server.ts` |
+| Knex CLI (migrate/seed) | mesma flag `--env-file=../../.env` via tsx |
+
+Validação acontece em [`src/config/env.ts`](app/api/src/config/env.ts) com Zod: o processo cai se faltar variável ou se um secret JWT tiver menos de 32 chars.
 
 ```env
 # ── Postgres ─────────────────────────
@@ -105,8 +119,9 @@ API_PORT=3000
 APP_URL=https://localhost
 
 # ── JWT ──────────────────────────────
-JWT_ACCESS_SECRET=replace-with-strong-secret
-JWT_REFRESH_SECRET=replace-with-another-strong-secret
+# Ambos os secrets precisam ter pelo menos 32 chars.
+JWT_ACCESS_SECRET=replace-with-a-strong-secret-of-32-chars-min
+JWT_REFRESH_SECRET=replace-with-another-strong-secret-of-32-chars
 JWT_ACCESS_EXPIRES=15m
 JWT_REFRESH_EXPIRES=7d
 
@@ -117,19 +132,31 @@ SMTP_USER=user
 SMTP_PASS=pass
 SMTP_FROM=no-reply@matcha.local
 
-# ── Uploads ──────────────────────────
-UPLOAD_DIR=/usr/src/app/uploads
-MAX_PHOTO_SIZE_MB=5
+# ── Uploads (a habilitar na Fase 5) ─
+# UPLOAD_DIR=/usr/src/app/uploads
+# MAX_PHOTO_SIZE_MB=5
 ```
+
+> ⚠️ Se um valor contém `$`, escape com `$$` ou envolva em aspas simples — o Compose tenta interpolar `${...}` em todo `.env` e silencia com warning caso a variável referenciada não exista.
 
 ---
 
 ## 5. Docker & Docker Compose
 
-Exemplo de `docker-compose.yml`:
+Princípios:
+
+- **Zero dependência no host** além de Docker e Docker Compose. Nem `openssl`, nem `node`, nem `psql`.
+- **Volumes nomeados** (`matcha_db`, `matcha_uploads`, `matcha_certs`) em vez de bind mounts para dados — repo limpo, dados sobrevivem entre `make down/up`.
+- **nginx é uma imagem própria** (`./nginx/Dockerfile`), não a oficial direto, para hospedar o gerador de certificados.
 
 ```yaml
-version: '3.9'
+volumes:
+  matcha_db:
+  matcha_uploads:
+  matcha_certs:
+
+networks:
+  matcha_net:
 
 services:
   db:
@@ -140,24 +167,27 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
     volumes:
-      - db_data:/var/lib/postgresql/data
+      - matcha_db:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}']
+      interval: 5s
+      timeout: 3s
+      retries: 5
     networks: [matcha_net]
 
   api:
-    build: ./api
+    build: ./app/api
     restart: unless-stopped
-    depends_on: [db]
-    environment:
-      NODE_ENV: ${NODE_ENV}
+    depends_on:
+      db:
+        condition: service_healthy
     env_file: .env
     volumes:
-      - ./api:/usr/src/app
-      - uploads:/usr/src/app/uploads
-      - /usr/src/app/node_modules
+      - matcha_uploads:/usr/src/app/uploads
     networks: [matcha_net]
 
   nginx:
-    image: nginx:1.27-alpine
+    build: ./nginx
     restart: unless-stopped
     depends_on: [api]
     ports:
@@ -165,32 +195,41 @@ services:
       - '443:443'
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./nginx/certs:/etc/nginx/certs:ro
-      - ./frontend/dist:/usr/share/nginx/html:ro
-      - uploads:/usr/share/nginx/uploads:ro
+      - matcha_certs:/etc/nginx/certs
+      - matcha_uploads:/usr/share/nginx/uploads:ro
     networks: [matcha_net]
-
-volumes:
-  db_data:
-  uploads:
-
-networks:
-  matcha_net:
 ```
+
+> O serviço `frontend` (Vite dev) entra no compose quando reconectarmos o SPA ao Nginx. O `location /` correspondente no `nginx.conf` fica comentado até lá.
 
 ---
 
 ## 6. Nginx & SSL Local
 
-### Gerar certificado self-signed com OpenSSL
+### Certificados — geração automática dentro do container
 
-```bash
-mkdir -p nginx/certs
-openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
-  -keyout nginx/certs/server.key \
-  -out nginx/certs/server.crt \
-  -subj "/C=BR/ST=SP/L=SP/O=Matcha/CN=localhost"
+Não há passo manual de `openssl` no host. O `nginx/Dockerfile` instala `openssl` e copia [`gen-certs.sh`](nginx/gen-certs.sh) para `/docker-entrypoint.d/01-gen-certs.sh` — a imagem oficial do nginx executa qualquer `*.sh` desse diretório antes de subir o servidor.
+
+```dockerfile
+FROM nginx:1.27-alpine
+RUN apk add --no-cache openssl
+COPY gen-certs.sh /docker-entrypoint.d/01-gen-certs.sh
+RUN chmod +x /docker-entrypoint.d/01-gen-certs.sh
 ```
+
+O script é **idempotente**: se `/etc/nginx/certs/server.{crt,key}` já existem no volume `matcha_certs`, ele sai em milissegundos. Caso contrário, gera um self-signed com SAN `DNS:localhost, IP:127.0.0.1`, válido por 365 dias.
+
+```sh
+# nginx/gen-certs.sh (resumo)
+CERT_DIR=/etc/nginx/certs
+[ -f "$CERT_DIR/server.crt" ] && [ -f "$CERT_DIR/server.key" ] && exit 0
+openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+    -keyout "$CERT_DIR/server.key" -out "$CERT_DIR/server.crt" \
+    -subj "/C=BR/ST=SP/L=SP/O=Matcha/CN=localhost" \
+    -addext "subjectAltName=DNS:localhost,IP:127.0.0.1"
+```
+
+Para regenerar (ex.: cert expirou ou trocou o CN): `make regen-certs && make up`.
 
 ### `nginx/nginx.conf` (resumo)
 
@@ -198,6 +237,7 @@ openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
 events {}
 http {
   upstream api { server api:3000; }
+  # upstream frontend { server frontend:5173; }   # reativar quando subir o SPA
 
   server {
     listen 80;
@@ -206,37 +246,47 @@ http {
 
   server {
     listen 443 ssl;
+    http2 on;
     server_name localhost;
 
     ssl_certificate     /etc/nginx/certs/server.crt;
     ssl_certificate_key /etc/nginx/certs/server.key;
+    ssl_protocols       TLSv1.2 TLSv1.3;
 
-    # Frontend (SPA)
-    root /usr/share/nginx/html;
-    index index.html;
-
-    location / { try_files $uri /index.html; }
-
-    # API
+    # API REST
     location /api/ {
       proxy_pass http://api/;
-      proxy_set_header Host $host;
-      proxy_set_header X-Real-IP $remote_addr;
+      proxy_set_header Host              $host;
+      proxy_set_header X-Real-IP         $remote_addr;
+      proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+      proxy_set_header X-Forwarded-Proto $scheme;
     }
 
     # WebSocket
     location /ws/ {
       proxy_pass http://api/;
       proxy_http_version 1.1;
-      proxy_set_header Upgrade $http_upgrade;
+      proxy_set_header Upgrade    $http_upgrade;
       proxy_set_header Connection "upgrade";
-      proxy_set_header Host $host;
+      proxy_set_header Host       $host;
+      proxy_read_timeout 3600s;
     }
 
-    # Uploads (servidos pelo Nginx)
+    # Uploads servidos diretamente pelo Nginx
     location /uploads/ {
       alias /usr/share/nginx/uploads/;
+      access_log off;
+      expires 7d;
     }
+
+    # Frontend (SPA via Vite dev server) — habilitar com o serviço `frontend`
+    # location / {
+    #   proxy_pass http://frontend;
+    #   proxy_http_version 1.1;
+    #   proxy_set_header Upgrade    $http_upgrade;
+    #   proxy_set_header Connection "upgrade";
+    #   proxy_set_header Host       $host;
+    # }
   }
 }
 ```
@@ -1049,41 +1099,63 @@ Lista de notificações.
 
 ## 13. Setup e Execução
 
+**Pré-requisitos no host:** Docker + Docker Compose. Nada mais.
+
 ```bash
-# 1. Clonar e configurar
+# 1. Copiar e editar o env (atenção aos secrets JWT ≥ 32 chars)
 cp .env.example .env
-# editar .env
 
-# 2. Gerar certificados
-./scripts/gen-certs.sh
+# 2. Subir tudo — build, certs auto-gerados, db pronto, api ouvindo
+make up
 
-# 3. Subir os containers
-docker compose up -d --build
+# 3. Validar a pipeline Nginx → API
+make health        # esperado: HTTP 200 {"status":"ok"}
 
-# 4. Rodar migrations e seeds (dentro do container api)
-docker compose exec api npx knex migrate:latest
-docker compose exec api npx knex seed:run
-
-# 5. Acessar
-# Frontend + API: https://localhost
-# (aceitar o certificado self-signed no navegador)
-
-# Logs
-docker compose logs -f api
+# 4. Rodar migrations e seeds (a partir da Fase 2) — do host, contra a porta publicada do db
+cd app/api
+npm run migrate
+npm run seed
 ```
+
+> Acesso: `https://localhost/api/...` e `wss://localhost/ws`. Aceite o cert self-signed na primeira visita pelo navegador.
+
+### Alvos do `Makefile`
+
+| Alvo            | Faz                                                                     |
+| --------------- | ----------------------------------------------------------------------- |
+| `make up`       | `docker compose up -d --build` — sobe a stack, primeira vez gera certs  |
+| `make down`     | para containers (volumes preservados)                                   |
+| `make restart`  | restart sem rebuild                                                     |
+| `make rebuild`  | `build --no-cache`                                                      |
+| `make logs`     | `logs -f` de todos os serviços                                          |
+| `make ps`       | status                                                                  |
+| `make health`   | `curl -sk https://localhost/api/health`                                 |
+| `make access-db` | abre `psql` dentro do container `db` (usa `POSTGRES_USER`/`POSTGRES_DB` do próprio container) |
+| `make regen-certs` | apaga o volume `matcha_certs` — próximo `make up` gera certs novos   |
+| `make clean`    | `down -v` — derruba e **remove os volumes** (db, uploads, certs)        |
+| `make nuke`     | `clean` + remove imagens do projeto                                     |
+| `make help`     | imprime essa lista                                                      |
+
+### Convenção de migrations
+
+- **Sempre** gerar migrations via `npm run migrate:make -- <nome_snake_case>`. Nunca criar `.ts` à mão em `src/database/migrations/` — o knex aplica o prefixo `YYYYMMDDHHMMSS_<nome>.ts` que mantém a ordem cronológica e evita colisão entre branches.
+- Nomes em `snake_case` curtos e descritivos (`users`, `auth_tokens`, `profiles`, `photos_tags`, etc.) — não o nome da feature de produto, sim o subset de schema sendo alterado.
+- Cada migration **deve implementar `up` e `down`**. Sem rota de volta, não passa em revisão.
+- Migrations rodam do **host**, não do container — o container da API serve a aplicação, o ciclo de schema é tooling de dev.
 
 ### Comandos úteis
 
 ```bash
-# Nova migration
-docker compose exec api npx knex migrate:make create_users_table
+# Nova migration (a partir de app/api/)
+cd app/api
+npm run migrate:make -- create_users_table
 
 # Reset do banco (dev only!)
-docker compose exec api npx knex migrate:rollback --all
-docker compose exec api npx knex migrate:latest
+npm run migrate:rollback -- --all
+npm run migrate
 
 # Acessar o psql
-docker compose exec db psql -U matcha -d matcha_db
+make access-db
 ```
 
 ---
@@ -1112,4 +1184,4 @@ docker compose exec db psql -U matcha -d matcha_db
 
 ---
 
-**Última atualização:** Maio/2026
+**Última atualização:** Maio/2026 (Fases 0–1: bootstrap + infra Docker/Nginx/TLS).
