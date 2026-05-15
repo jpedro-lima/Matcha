@@ -1,0 +1,50 @@
+{
+  "name": "matcha-api",
+  "version": "0.1.0",
+  "private": true,
+  "main": "dist/server.js",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "tsx watch --env-file=../../.env src/server.ts",
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "lint": "eslint . --ext .ts",
+    "lint:fix": "eslint . --ext .ts --fix",
+    "format": "prettier --write \"src/**/*.ts\" \"database/**/*.ts\"",
+    "format:check": "prettier --check \"src/**/*.ts\" \"database/**/*.ts\"",
+    "typecheck": "tsc --noEmit",
+    "migrate": "tsx --env-file=../../.env ./node_modules/knex/bin/cli.js --knexfile database/knexfile.ts migrate:latest",
+    "migrate:make": "tsx --env-file=../../.env ./node_modules/knex/bin/cli.js --knexfile database/knexfile.ts migrate:make",
+    "migrate:rollback": "tsx --env-file=../../.env ./node_modules/knex/bin/cli.js --knexfile database/knexfile.ts migrate:rollback",
+    "seed": "tsx --env-file=../../.env ./node_modules/knex/bin/cli.js --knexfile database/knexfile.ts seed:run",
+    "seed:make": "tsx --env-file=../../.env ./node_modules/knex/bin/cli.js --knexfile database/knexfile.ts seed:make"
+  },
+  "devDependencies": {
+    "@types/compression": "^1.8.1",
+    "@types/cookie-parser": "^1.4.10",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/morgan": "^1.9.10",
+    "@types/node": "^25.8.0",
+    "@typescript-eslint/eslint-plugin": "^8.59.3",
+    "@typescript-eslint/parser": "^8.59.3",
+    "eslint": "^10.4.0",
+    "eslint-config-prettier": "^10.1.8",
+    "prettier": "^3.8.3",
+    "tsx": "^4.22.0",
+    "typescript": "^6.0.3"
+  },
+  "dependencies": {
+    "compression": "^1.8.1",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.6",
+    "express": "^5.2.1",
+    "express-rate-limit": "^8.5.2",
+    "helmet": "^8.1.0",
+    "morgan": "^1.10.1",
+    "zod": "^4.4.3"
+  }
+}

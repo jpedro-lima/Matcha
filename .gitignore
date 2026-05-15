@@ -1,0 +1,17 @@
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Build artifacts
+node_modules/
+dist/
+coverage/
+.tsbuildinfo
+
+# Runtime
+uploads/
+
+# OS / editor
+*.log
+.DS_Store
