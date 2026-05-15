@@ -5,11 +5,11 @@ const envSchema = z.object({
 	API_PORT: z.coerce.number().int().positive().default(3000),
 	APP_URL: z.url(),
 
-	// POSTGRES_USER: z.string().min(1),
-	// POSTGRES_PASSWORD: z.string().min(1),
-	// POSTGRES_DB: z.string().min(1),
-	// POSTGRES_HOST: z.string().min(1),
-	// POSTGRES_PORT: z.coerce.number().int().positive().default(5432),
+	POSTGRES_USER: z.string().min(1),
+	POSTGRES_PASSWORD: z.string().min(1),
+	POSTGRES_DB: z.string().min(1),
+	POSTGRES_HOST: z.string().min(1),
+	POSTGRES_PORT: z.coerce.number().int().positive().default(5432),
 
 	JWT_ACCESS_SECRET: z.string().min(32, 'JWT_ACCESS_SECRET must be at least 32 chars'),
 	JWT_REFRESH_SECRET: z.string().min(32, 'JWT_REFRESH_SECRET must be at least 32 chars'),

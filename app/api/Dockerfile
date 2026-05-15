@@ -25,8 +25,8 @@ RUN npm ci --omit=dev && npm cache clean --force
 COPY --from=builder /usr/src/app/dist ./dist
 
 RUN mkdir -p /usr/src/app/uploads && \
-    addgroup -S app && adduser -S app -G app && \
-    chown -R app:app /usr/src/app
+	addgroup -S app && adduser -S app -G app && \
+	chown -R app:app /usr/src/app
 
 USER app
 

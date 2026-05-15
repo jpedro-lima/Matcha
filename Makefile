@@ -4,7 +4,7 @@
 
 COMPOSE := docker compose
 
-.PHONY: help up down restart logs ps build rebuild health regen-certs clean nuke
+.PHONY: help up down restart logs ps build rebuild health access-db regen-certs clean nuke
 
 help: ## Show this help
 	@awk 'BEGIN{FS=":.*##"; printf "Targets:\n"} /^[a-zA-Z_-]+:.*##/ {printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -32,6 +32,9 @@ ps: ## Show container status
 
 health: ## Hit the API healthcheck through nginx
 	@curl -sk -w '\nHTTP %{http_code}\n' https://localhost/api/health
+
+access-db: ## Open psql inside the db container using POSTGRES_USER/DB from the container env
+	$(COMPOSE) exec db sh -c 'psql -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"'
 
 regen-certs: ## Drop the cert volume so nginx regenerates on next `make up`
 	$(COMPOSE) rm -sf nginx

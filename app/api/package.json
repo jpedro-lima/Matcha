@@ -13,14 +13,15 @@
     "start": "node dist/server.js",
     "lint": "eslint . --ext .ts",
     "lint:fix": "eslint . --ext .ts --fix",
-    "format": "prettier --write \"src/**/*.ts\" \"database/**/*.ts\"",
-    "format:check": "prettier --check \"src/**/*.ts\" \"database/**/*.ts\"",
+    "format": "prettier --write \"src/**/*.ts\"",
+    "format:check": "prettier --check \"src/**/*.ts\"",
     "typecheck": "tsc --noEmit",
-    "migrate": "tsx --env-file=../../.env ./node_modules/knex/bin/cli.js --knexfile database/knexfile.ts migrate:latest",
-    "migrate:make": "tsx --env-file=../../.env ./node_modules/knex/bin/cli.js --knexfile database/knexfile.ts migrate:make",
-    "migrate:rollback": "tsx --env-file=../../.env ./node_modules/knex/bin/cli.js --knexfile database/knexfile.ts migrate:rollback",
-    "seed": "tsx --env-file=../../.env ./node_modules/knex/bin/cli.js --knexfile database/knexfile.ts seed:run",
-    "seed:make": "tsx --env-file=../../.env ./node_modules/knex/bin/cli.js --knexfile database/knexfile.ts seed:make"
+    "knex": "tsx --env-file=../../.env ./node_modules/knex/bin/cli.js --knexfile src/database/knexfile.ts",
+    "migrate": "tsx --env-file=../../.env ./node_modules/knex/bin/cli.js --knexfile src/database/knexfile.ts migrate:latest",
+    "migrate:make": "tsx --env-file=../../.env ./node_modules/knex/bin/cli.js --knexfile src/database/knexfile.ts migrate:make",
+    "migrate:rollback": "tsx --env-file=../../.env ./node_modules/knex/bin/cli.js --knexfile src/database/knexfile.ts migrate:rollback",
+    "seed": "tsx --env-file=../../.env ./node_modules/knex/bin/cli.js --knexfile src/database/knexfile.ts seed:run",
+    "seed:make": "tsx --env-file=../../.env ./node_modules/knex/bin/cli.js --knexfile src/database/knexfile.ts seed:make"
   },
   "devDependencies": {
     "@types/compression": "^1.8.1",
@@ -29,6 +30,7 @@
     "@types/express": "^5.0.6",
     "@types/morgan": "^1.9.10",
     "@types/node": "^25.8.0",
+    "@types/pg": "^8.20.0",
     "@typescript-eslint/eslint-plugin": "^8.59.3",
     "@typescript-eslint/parser": "^8.59.3",
     "eslint": "^10.4.0",
@@ -44,7 +46,9 @@
     "express": "^5.2.1",
     "express-rate-limit": "^8.5.2",
     "helmet": "^8.1.0",
+    "knex": "^3.2.10",
     "morgan": "^1.10.1",
+    "pg": "^8.20.0",
     "zod": "^4.4.3"
   }
 }
