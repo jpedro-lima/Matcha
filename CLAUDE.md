@@ -17,7 +17,7 @@ make down    # docker-compose down
 
 The backend container runs `migrate -path ./migrations -database ... up && ./main` on boot (see `app/backend/Dockerfile`), so adding a new migration file in `app/backend/migrations/` and restarting the `app` container is the migration workflow — there is no separate migrate command.
 
-Frontend Docker mounts package.json and runs `npm run dev`. For local dev outside Docker, run `npm install && npm run dev` from `app/frontend/web-matcha/`.
+Frontend Docker mounts package.json and runs `npm run dev`. For local dev outside Docker, run `npm install && npm run dev` from `app/frontend-web/`.
 
 ## Backend (Go)
 
@@ -44,7 +44,7 @@ Key cross-cutting things to know:
 
 All routes are registered in [app/backend/main.go](app/backend/main.go) — start there to find the handler for any endpoint. Static uploads are served from `./static/` under `/static/*`.
 
-## Frontend (`app/frontend/web-matcha/`)
+## Frontend (`app/frontend-web/`)
 
 React 19 + Vite 6 + TypeScript, Tailwind v4, shadcn-style UI primitives, React Router 7, TanStack Query, react-hook-form + zod, axios.
 
@@ -76,33 +76,33 @@ The full auth cycle (register → confirm via logged link → login → update_p
 
 ## Itens faltando vs. `specifications.md` (frontend)
 
-Snapshot do gap entre o que está implementado em [app/frontend/web-matcha/](app/frontend/web-matcha/) e o que `specifications.md` exige. Atualizar conforme as features forem entregues.
+Snapshot do gap entre o que está implementado em [app/frontend-web/](app/frontend-web/) e o que `specifications.md` exige. Atualizar conforme as features forem entregues.
 
 ### IV.1 Registro e Login
-- [ ] **Login por username** — formulário em [pages/auth/sign-in.tsx](app/frontend/web-matcha/src/pages/auth/sign-in.tsx) usa campo `email` com placeholder "Username"; spec exige login via username.
-- [ ] **Validação de senhas fracas (dicionário)** — [pages/auth/register.tsx](app/frontend/web-matcha/src/pages/auth/register.tsx) só checa regex de complexidade; não bloqueia palavras de dicionário.
+- [ ] **Login por username** — formulário em [pages/auth/sign-in.tsx](app/frontend-web/src/pages/auth/sign-in.tsx) usa campo `email` com placeholder "Username"; spec exige login via username.
+- [ ] **Validação de senhas fracas (dicionário)** — [pages/auth/register.tsx](app/frontend-web/src/pages/auth/register.tsx) só checa regex de complexidade; não bloqueia palavras de dicionário.
 - [ ] **Confirmação de senha** — campo `validatePassword` existe mas o schema zod não valida igualdade.
-- [ ] **Fluxo de reset de senha funcional** — [pages/auth/reset-password.tsx](app/frontend/web-matcha/src/pages/auth/reset-password.tsx) é só UI; sem `onSubmit`, sem chamada de API, sem tela de "nova senha" a partir do link do e-mail.
-- [ ] **Logout em qualquer página** — implementado dentro de `MainLayout`, mas o header público em [components/header.tsx](app/frontend/web-matcha/src/components/header.tsx) não tem logout para sessões que caiam em rotas públicas.
+- [ ] **Fluxo de reset de senha funcional** — [pages/auth/reset-password.tsx](app/frontend-web/src/pages/auth/reset-password.tsx) é só UI; sem `onSubmit`, sem chamada de API, sem tela de "nova senha" a partir do link do e-mail.
+- [ ] **Logout em qualquer página** — implementado dentro de `MainLayout`, mas o header público em [components/header.tsx](app/frontend-web/src/components/header.tsx) não tem logout para sessões que caiam em rotas públicas.
 - [ ] **Verificação de e-mail (UI)** — sem página/feedback que confirme conta a partir do link único.
 
 ### IV.2 Perfil do Usuário
-- [ ] **Data de nascimento** — [pages/profile/profile-form.tsx](app/frontend/web-matcha/src/pages/profile/profile-form.tsx) envia `birth_date: '1990-01-01'` fixo; sem date picker.
+- [ ] **Data de nascimento** — [pages/profile/profile-form.tsx](app/frontend-web/src/pages/profile/profile-form.tsx) envia `birth_date: '1990-01-01'` fixo; sem date picker.
 - [ ] **Atributos / "looking for"** — também enviados hardcoded (`height: '180cm'`, `occupation`, `relationship_type`, etc.).
-- [ ] **Fame rating real** — [pages/profile/profile.tsx](app/frontend/web-matcha/src/pages/profile/profile.tsx#L52) exibe valor fixo `325`.
+- [ ] **Fame rating real** — [pages/profile/profile.tsx](app/frontend-web/src/pages/profile/profile.tsx#L52) exibe valor fixo `325`.
 - [ ] **Quem visualizou meu perfil** — sem UI/rota para o histórico de visitas.
 - [ ] **Quem curtiu meu perfil** — sem UI para a lista de likes recebidos.
 - [ ] **Editar nome, sobrenome, e-mail, senha** — formulário de perfil só salva bio/gênero/tags/fotos; sem fluxo de edição dos campos do usuário.
-- [ ] **Tags reutilizáveis** — lista de tags em [profile-form.tsx](app/frontend/web-matcha/src/pages/profile/profile-form.tsx#L34-L90) é estática no frontend; spec pede tags reutilizáveis (criadas por usuários e reaproveitadas).
-- [ ] **Até 5 fotos com designação de foto de perfil** — [pages/profile/carousel-form.tsx](app/frontend/web-matcha/src/pages/profile/carousel-form.tsx) precisa de validação de limite e seleção de foto principal explícita.
-- [ ] **Consentimento GPS explícito + fallback manual** — [hooks/get-user-location.tsx](app/frontend/web-matcha/src/hooks/get-user-location.tsx) chama `geolocation` direto (sem prompt de consentimento na UI) e cai em IP automaticamente; sem input manual de cidade/bairro nem persistência no perfil.
+- [ ] **Tags reutilizáveis** — lista de tags em [profile-form.tsx](app/frontend-web/src/pages/profile/profile-form.tsx#L34-L90) é estática no frontend; spec pede tags reutilizáveis (criadas por usuários e reaproveitadas).
+- [ ] **Até 5 fotos com designação de foto de perfil** — [pages/profile/carousel-form.tsx](app/frontend-web/src/pages/profile/carousel-form.tsx) precisa de validação de limite e seleção de foto principal explícita.
+- [ ] **Consentimento GPS explícito + fallback manual** — [hooks/get-user-location.tsx](app/frontend-web/src/hooks/get-user-location.tsx) chama `geolocation` direto (sem prompt de consentimento na UI) e cai em IP automaticamente; sem input manual de cidade/bairro nem persistência no perfil.
 - [ ] **Modificar localização a qualquer momento** — sem UI dedicada.
 
 ### IV.3 Navegação (Browsing)
-- [ ] **Lista de perfis sugeridos** — [pages/main/main.tsx](app/frontend/web-matcha/src/pages/main/main.tsx) carrega um perfil de cada vez (`getSuggestedProfile` em [api/get-match.ts](app/frontend/web-matcha/src/api/get-match.ts)); spec pede lista ordenável/filtrável.
+- [ ] **Lista de perfis sugeridos** — [pages/main/main.tsx](app/frontend-web/src/pages/main/main.tsx) carrega um perfil de cada vez (`getSuggestedProfile` em [api/get-match.ts](app/frontend-web/src/api/get-match.ts)); spec pede lista ordenável/filtrável.
 - [ ] **Ordenação e filtragem** (idade, localização, fame, tags em comum) — sem controles na UI.
 - [ ] **Respeito a orientação sexual e bissexual default** — não há indicação visível na UI; depende do backend.
-- [ ] **Tags do perfil sugerido** — `mapSuggested` em [main.tsx](app/frontend/web-matcha/src/pages/main/main.tsx#L62-L71) fixa `tags: []`; o backend não está devolvendo tags do match e a UI não exibe.
+- [ ] **Tags do perfil sugerido** — `mapSuggested` em [main.tsx](app/frontend-web/src/pages/main/main.tsx#L62-L71) fixa `tags: []`; o backend não está devolvendo tags do match e a UI não exibe.
 
 ### IV.4 Pesquisa (Research)
 - [ ] **Página de pesquisa avançada** — **inexistente**. Sem rota, sem componente, sem chamada API (faixa etária, faixa de fame, localização, tags).
@@ -113,17 +113,17 @@ Snapshot do gap entre o que está implementado em [app/frontend/web-matcha/](app
 - [ ] **Histórico de visitas registrado por visualização** — sem trigger no frontend (não há GET de perfil de outro usuário).
 - [ ] **Status online / última conexão** — não exibido em nenhuma página.
 - [ ] **Sinalização "esse usuário já te curtiu / vocês estão conectados"** — não há UI dedicada.
-- [ ] **Reportar conta falsa** — disponível apenas dentro de [pages/chat/chat-window.tsx](app/frontend/web-matcha/src/pages/chat/chat-window.tsx#L150) via `window.prompt`; deveria estar na view de perfil.
+- [ ] **Reportar conta falsa** — disponível apenas dentro de [pages/chat/chat-window.tsx](app/frontend-web/src/pages/chat/chat-window.tsx#L150) via `window.prompt`; deveria estar na view de perfil.
 - [ ] **Bloquear usuário** — idem: existe só no chat, não no perfil.
-- [ ] **Unlike a partir do perfil** — [api/unmatch.ts](app/frontend/web-matcha/src/api/unmatch.ts) existe, mas só é acionado pelo botão "Undo last match" do swipe.
+- [ ] **Unlike a partir do perfil** — [api/unmatch.ts](app/frontend-web/src/api/unmatch.ts) existe, mas só é acionado pelo botão "Undo last match" do swipe.
 
 ### IV.6 Chat
-- [ ] **Notificação global de nova mensagem em qualquer página** — o badge em [pages/_layouts/main.tsx](app/frontend/web-matcha/src/pages/_layouts/main.tsx#L29) cobre notificações, não mensagens; sem indicador específico de chat não lido.
-- [ ] **Reconexão automática do WebSocket** — [chat-window.tsx](app/frontend/web-matcha/src/pages/chat/chat-window.tsx) não trata reconexão em caso de `onclose`/erro de rede.
+- [ ] **Notificação global de nova mensagem em qualquer página** — o badge em [pages/_layouts/main.tsx](app/frontend-web/src/pages/_layouts/main.tsx#L29) cobre notificações, não mensagens; sem indicador específico de chat não lido.
+- [ ] **Reconexão automática do WebSocket** — [chat-window.tsx](app/frontend-web/src/pages/chat/chat-window.tsx) não trata reconexão em caso de `onclose`/erro de rede.
 - [ ] **UI de moderação fora de `window.prompt`/`alert`** — substituir prompts por dialogs (`AlertDialog`) para reportar/bloquear.
 
 ### IV.7 Notificações
-- [ ] **Push em tempo real** — atualmente faz polling de 5s via React Query em [main.tsx layout](app/frontend/web-matcha/src/pages/_layouts/main.tsx#L26); aceitável dentro do limite de 10s mas seria mais robusto via WebSocket/SSE.
+- [ ] **Push em tempo real** — atualmente faz polling de 5s via React Query em [main.tsx layout](app/frontend-web/src/pages/_layouts/main.tsx#L26); aceitável dentro do limite de 10s mas seria mais robusto via WebSocket/SSE.
 - [ ] **Cobertura dos 5 tipos de evento** — UI exibe genericamente `n.type`; falta diferenciação visual (ícone/cor) para like, view, message, match, unlike.
 - [ ] **Acesso ao perfil/origem da notificação** — clicar em uma notificação não leva ao perfil/chat correspondente.
 
