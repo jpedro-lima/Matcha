@@ -8,6 +8,9 @@ node_modules/
 dist/
 coverage/
 .tsbuildinfo
+**/node_modules/
+**/dist/
+
 
 # Runtime
 uploads/
