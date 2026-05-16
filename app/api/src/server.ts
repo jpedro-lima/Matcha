@@ -1,40 +1,28 @@
-import express from 'express'
+import { app } from './app.js'
+import { closeDb } from './config/db.js'
 import { env } from './config/env.js'
-import { closeDb, db } from './config/db.js'
-
-const app = express()
-
-app.get('/health', (_req, res) => {
-	res.json({ status: 'ok' })
-})
-
-app.get('/db-health', async (_req, res, next) => {
-	try {
-		const { rows } = await db.raw<{ rows: { version: string }[] }>('select version()')
-		res.json({ ok: true, version: rows[0]?.version ?? null })
-	} catch (err) {
-		next(err)
-	}
-})
+import { logger } from './config/logger.js'
 
 const server = app.listen(env.API_PORT, () => {
-	console.info(`API listening on :${env.API_PORT} (${env.NODE_ENV})`)
+	logger.info({ port: env.API_PORT, env: env.NODE_ENV }, 'API listening')
 })
 
 async function shutdown(signal: NodeJS.Signals): Promise<void> {
-	console.info(`[shutdown] received ${signal}, closing server`)
-	server.close((err) => {
-		if (err) {
-			console.error('[shutdown] error closing HTTP server', err)
-			process.exit(1)
-		}
+	logger.info({ signal }, 'shutdown: signal received, closing HTTP server')
+
+	await new Promise<void>((resolve, reject) => {
+		server.close((err) => (err ? reject(err) : resolve()))
+	}).catch((err) => {
+		logger.error({ err }, 'shutdown: error closing HTTP server')
+		process.exit(1)
 	})
+
 	try {
 		await closeDb()
-		console.info('[shutdown] db connection closed')
+		logger.info('shutdown: db connection closed')
 		process.exit(0)
 	} catch (err) {
-		console.error('[shutdown] error closing db', err)
+		logger.error({ err }, 'shutdown: error closing db')
 		process.exit(1)
 	}
 }

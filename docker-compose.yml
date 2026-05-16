@@ -34,10 +34,10 @@ services:
         condition: service_healthy
     env_file: .env
     environment:
-      # Container talks to db over the compose network, regardless of what
-      # POSTGRES_HOST resolves to on the host (which is `localhost` for the
-      # host-side knex/migrate workflow).
       POSTGRES_HOST: db
+      API_PORT: 3000
+    ports:
+      - '${API_PORT:-3000}:3000'
     volumes:
       - matcha_uploads:/usr/src/app/uploads
     networks:
