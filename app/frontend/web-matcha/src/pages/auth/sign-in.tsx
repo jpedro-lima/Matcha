@@ -5,13 +5,13 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import googleLogo from '@/assets/google-logo.svg'
-import { ResetPassword } from './reset-password'
+import { Link } from 'react-router'
 import { useMutation } from '@tanstack/react-query'
 import { signIn } from '@/api/sign-in'
 import { useNavigate } from 'react-router'
 
 const signInSchema = z.object({
-	email: z.string().email(),
+	username: z.string().nonempty('Please enter your username'),
 	password: z.string().nonempty('Please enter your password'),
 })
 
@@ -57,9 +57,11 @@ export function SignIn() {
 			<main className="md:bg-muted flex">
 				<div className="mx-auto h-[30rem] w-80 md:my-auto md:ml-22 md:w-96">
 					<form onSubmit={handleSubmit(handleLogin)} className="flex flex-col">
-						<Input type="text" placeholder="Username" {...register('email')} />
+						<Input type="text" placeholder="Username" {...register('username')} />
 						<Input type="password" placeholder="Password" {...register('password')} />
-						<ResetPassword />
+						<Link to="/forgot-password" className="text-muted-foreground self-end text-sm underline">
+							Forgot password?
+						</Link>
 
 						<Button type="submit" disabled={isSubmitting} className="mt-6">
 							Sign in

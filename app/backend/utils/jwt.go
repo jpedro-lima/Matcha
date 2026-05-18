@@ -1,14 +1,22 @@
 package utils
 
 import (
-    "errors"
-    "net/http"
-    "strings"
+	"errors"
+	"net/http"
+	"os"
+	"strings"
 	"time"
-    "github.com/golang-jwt/jwt/v5"
+
+	"github.com/golang-jwt/jwt/v5"
 )
 
-var jwtKey = []byte("your_secret_key")
+var jwtKey = func() []byte {
+	s := os.Getenv("JWT_SECRET")
+	if s == "" {
+		s = "dev_fallback_secret_change_in_prod"
+	}
+	return []byte(s)
+}()
 
 func GenerateJWT(userID int) (string, error) {
     claims := jwt.MapClaims{

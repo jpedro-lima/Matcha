@@ -6,12 +6,19 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      mailpit:
+        condition: service_started
     environment:
       - DB_HOST=db
       - DB_PORT=5432
       - DB_USER=postgres
       - DB_PASSWORD=mysecretpassword
       - DB_NAME=postgres
+      - JWT_SECRET=matcha_dev_jwt_secret_change_in_production_32chars
+      - SMTP_HOST=mailpit
+      - SMTP_PORT=1025
+      - SMTP_USER=matcha@matcha.local
+      - SMTP_PASS=
 
   db:
     image: postgis/postgis:15-3.3
@@ -26,6 +33,13 @@ services:
       interval: 5s
       timeout: 3s
       retries: 5
+
+  mailpit:
+    image: axllent/mailpit:latest
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+
   frontend:
     build: ./app/frontend/web-matcha
     ports:

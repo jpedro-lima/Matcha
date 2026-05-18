@@ -9,6 +9,7 @@ RUN go mod download
 COPY . .
 
 RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o main .
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o seed ./scripts/seed.go
 
 # Use a smaller final image
 FROM alpine:latest
@@ -25,9 +26,10 @@ RUN curl -L https://github.com/golang-migrate/migrate/releases/download/v4.16.2/
 COPY --from=builder /app/main .
 COPY --from=builder /app/migrations ./migrations
 COPY --from=builder /app/chat.html chat.html
+COPY --from=builder /app/seed .
 # Expose app port
 EXPOSE 8080
 
 # Entry point: run migration, then app
-CMD migrate -path ./migrations -database "postgres://postgres:mysecretpassword@db:5432/postgres?sslmode=disable" up && ./main
+CMD migrate -path ./migrations -database "postgres://postgres:mysecretpassword@db:5432/postgres?sslmode=disable" up && ./seed && ./main
 

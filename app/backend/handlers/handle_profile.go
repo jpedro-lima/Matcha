@@ -6,8 +6,11 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path"
 	"path/filepath"
 	"strconv"
+	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -18,11 +21,21 @@ import (
 	"github.com/lib/pq"
 )
 
+// UpdateLastActive is middleware that stamps last_active on every authenticated request.
+func UpdateLastActive(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if userID, err := utils.GetUserIDFromRequest(r); err == nil {
+			config.DB.Exec(`UPDATE profiles SET last_active = NOW() WHERE user_id = $1`, userID)
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 func CreateProfile(w http.ResponseWriter, r *http.Request) {
 	userID, err := utils.GetUserIDFromRequest(r)
 	if err != nil {
 		log.Printf("Auth error: %v", err)
-		http.Error(w, err.Error(), http.StatusUnauthorized)
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
 
@@ -31,65 +44,36 @@ func CreateProfile(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Invalid request payload", http.StatusBadRequest)
 		return
 	}
-
 	profile.UserID = userID
-	// Ensure location fallback before any DB operations
-	if profile.Location == "" {
-		profile.Location = "POINT(0 0)"
-	}
 
-	// Marshal JSONB fields early so we can reuse them for upsert/update
-	attributesJSON, err := json.Marshal(profile.Attributes)
-	if err != nil {
-		http.Error(w, "Failed to serialize attributes", http.StatusBadRequest)
+	if profile.Location == "" || profile.Location == "POINT(0 0)" {
+		http.Error(w, "Location is required. Please allow GPS or enter your city.", http.StatusBadRequest)
 		return
 	}
-
-	lookingForJSON, err := json.Marshal(profile.LookingFor)
-	if err != nil {
-		http.Error(w, "Failed to serialize looking_for", http.StatusBadRequest)
-		return
+	if len(profile.PreferredGender) == 0 {
+		profile.PreferredGender = pq.StringArray{"male", "female", "non-binary"}
 	}
 
-	profilePhotosJSON, err := json.Marshal(profile.ProfilePhotos)
-	if err != nil {
-		http.Error(w, "Failed to serialize profile_photos", http.StatusBadRequest)
-		return
-	}
+	attributesJSON, _ := json.Marshal(profile.Attributes)
+	lookingForJSON, _ := json.Marshal(profile.LookingFor)
+	profilePhotosJSON, _ := json.Marshal(profile.ProfilePhotos)
 
-	// If a profile for this user already exists, update it instead of inserting to avoid unique constraint errors.
 	var existingID int
 	if err := config.DB.QueryRow("SELECT id FROM profiles WHERE user_id = $1", userID).Scan(&existingID); err == nil {
-		// existing profile found -> perform update
 		_, err := config.DB.Exec(`
 			UPDATE profiles SET
-				bio = $1,
-				gender = $2,
-				preferred_gender = $3,
-				birth_date = $4,
-				location = ST_GeogFromText($5),
-				search_radius = $6,
-				tags = $7,
-				attributes = $8::jsonb,
-				looking_for = $9::jsonb,
-				profile_photos = $10::jsonb,
+				bio = $1, gender = $2, preferred_gender = $3, birth_date = $4,
+				location = ST_GeogFromText($5), search_radius = $6, tags = $7,
+				attributes = $8::jsonb, looking_for = $9::jsonb, profile_photos = $10::jsonb,
 				updated_at = NOW()
 			WHERE user_id = $11
 		`,
-			profile.Bio,
-			profile.Gender,
-			pq.Array(profile.PreferredGender),
-			profile.BirthDate,
-			profile.Location,
-			profile.SearchRadius,
-			pq.Array(profile.Tags),
-			attributesJSON,
-			lookingForJSON,
-			profilePhotosJSON,
-			userID,
+			profile.Bio, profile.Gender, pq.Array(profile.PreferredGender),
+			profile.BirthDate, profile.Location, profile.SearchRadius,
+			pq.Array(profile.Tags), attributesJSON, lookingForJSON, profilePhotosJSON, userID,
 		)
 		if err != nil {
-			http.Error(w, "Failed to update existing profile: "+err.Error(), http.StatusInternalServerError)
+			http.Error(w, "Failed to update profile: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
 		profile.ID = existingID
@@ -98,27 +82,15 @@ func CreateProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	query := `
-        INSERT INTO profiles (
-            user_id, bio, gender, preferred_gender, birth_date, location,
-            search_radius, tags, attributes, looking_for, profile_photos
-        )
-        VALUES ($1, $2, $3, $4, $5, ST_GeogFromText($6), $7, $8, $9::jsonb, $10::jsonb, $11::jsonb)
-        RETURNING id
-    `
-	err = config.DB.QueryRow(
-		query,
-		profile.UserID,                    // $1
-		profile.Bio,                       // $2
-		profile.Gender,                    // $3
-		pq.Array(profile.PreferredGender), // $4
-		profile.BirthDate,                 // $5
-		profile.Location,                  // $6 (WKT)
-		profile.SearchRadius,              // $7
-		pq.Array(profile.Tags),            // $8
-		attributesJSON,                    // $9
-		lookingForJSON,                    // $10
-		profilePhotosJSON,                 // $11
+	err = config.DB.QueryRow(`
+		INSERT INTO profiles (user_id, bio, gender, preferred_gender, birth_date, location,
+			search_radius, tags, attributes, looking_for, profile_photos)
+		VALUES ($1, $2, $3, $4, $5, ST_GeogFromText($6), $7, $8, $9::jsonb, $10::jsonb, $11::jsonb)
+		RETURNING id
+	`,
+		profile.UserID, profile.Bio, profile.Gender, pq.Array(profile.PreferredGender),
+		profile.BirthDate, profile.Location, profile.SearchRadius,
+		pq.Array(profile.Tags), attributesJSON, lookingForJSON, profilePhotosJSON,
 	).Scan(&profile.ID)
 	if err != nil {
 		http.Error(w, "Failed to create profile: "+err.Error(), http.StatusInternalServerError)
@@ -133,7 +105,7 @@ func CreateProfile(w http.ResponseWriter, r *http.Request) {
 func UpdateProfile(w http.ResponseWriter, r *http.Request) {
 	userID, err := utils.GetUserIDFromRequest(r)
 	if err != nil {
-		http.Error(w, "Unauthorized4", http.StatusUnauthorized)
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
 
@@ -150,78 +122,48 @@ func UpdateProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Validate birth date - convert empty string to nil
 	var birthDate interface{} = updated.BirthDate
 	if updated.BirthDate == "" {
 		birthDate = nil
 	}
 
-	// Marshal JSONB fields with empty array defaults
-	attributesJSON, err := json.Marshal(updated.Attributes)
-	if err != nil {
-		http.Error(w, "Failed to serialize attributes", http.StatusBadRequest)
-		return
-	}
+	attributesJSON, _ := json.Marshal(updated.Attributes)
+	lookingForJSON, _ := json.Marshal(updated.LookingFor)
+	profilePhotosJSON, _ := json.Marshal(updated.ProfilePhotos)
+
 	if string(attributesJSON) == "null" {
 		attributesJSON = []byte("[]")
 	}
-
-	lookingForJSON, err := json.Marshal(updated.LookingFor)
-	if err != nil {
-		http.Error(w, "Failed to serialize looking_for", http.StatusBadRequest)
-		return
-	}
 	if string(lookingForJSON) == "null" {
 		lookingForJSON = []byte("[]")
-	}
-
-	profilePhotosJSON, err := json.Marshal(updated.ProfilePhotos)
-	if err != nil {
-		http.Error(w, "Failed to serialize profile_photos", http.StatusBadRequest)
-		return
 	}
 	if string(profilePhotosJSON) == "null" {
 		profilePhotosJSON = []byte("[]")
 	}
 
-	// Allow updating location when provided (WKT). If empty string, keep existing.
-	locParam := interface{}(nil)
+	var locParam interface{}
 	if updated.Location != "" {
 		locParam = updated.Location
 	}
 
-	query := `
-        UPDATE profiles SET
-            bio = COALESCE($1, bio),
-            gender = COALESCE($2, gender),
-            preferred_gender = COALESCE($3, preferred_gender),
-            birth_date = COALESCE($4, birth_date),
-            location = COALESCE(ST_GeogFromText($5), location),
-            search_radius = COALESCE($6, search_radius),
-            tags = COALESCE($7, tags),
-            attributes = COALESCE($8::jsonb, attributes),
-            looking_for = COALESCE($9::jsonb, looking_for),
-            profile_photos = COALESCE($10::jsonb, profile_photos),
-            updated_at = NOW()
-        WHERE id = $11 AND user_id = $12
-        RETURNING id
-    `
-	err = config.DB.QueryRow(
-		query,
-		updated.Bio,                       // $1
-		updated.Gender,                    // $2
-		pq.Array(updated.PreferredGender), // $3
-		birthDate,                         // $4
-		locParam,                          // $5
-		updated.SearchRadius,              // $6
-		pq.Array(updated.Tags),            // $7
-		attributesJSON,                    // $8
-		lookingForJSON,                    // $9
-		profilePhotosJSON,                 // $10
-		profileID,                         // $11
-		userID,                            // $12
+	err = config.DB.QueryRow(`
+		UPDATE profiles SET
+			bio = COALESCE($1, bio), gender = COALESCE($2, gender),
+			preferred_gender = COALESCE($3, preferred_gender),
+			birth_date = COALESCE($4, birth_date),
+			location = COALESCE(ST_GeogFromText($5), location),
+			search_radius = COALESCE($6, search_radius), tags = COALESCE($7, tags),
+			attributes = COALESCE($8::jsonb, attributes),
+			looking_for = COALESCE($9::jsonb, looking_for),
+			profile_photos = COALESCE($10::jsonb, profile_photos),
+			updated_at = NOW()
+		WHERE id = $11 AND user_id = $12
+		RETURNING id
+	`,
+		updated.Bio, updated.Gender, pq.Array(updated.PreferredGender), birthDate,
+		locParam, updated.SearchRadius, pq.Array(updated.Tags),
+		attributesJSON, lookingForJSON, profilePhotosJSON, profileID, userID,
 	).Scan(&updated.ID)
-
 	if err != nil {
 		http.Error(w, "Failed to update profile: "+err.Error(), http.StatusInternalServerError)
 		return
@@ -229,7 +171,6 @@ func UpdateProfile(w http.ResponseWriter, r *http.Request) {
 
 	updated.ID = profileID
 	updated.UserID = userID
-
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(updated)
 }
@@ -237,7 +178,7 @@ func UpdateProfile(w http.ResponseWriter, r *http.Request) {
 func DeleteProfile(w http.ResponseWriter, r *http.Request) {
 	userID, err := utils.GetUserIDFromRequest(r)
 	if err != nil {
-		http.Error(w, "Unauthorized5", http.StatusUnauthorized)
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
 
@@ -259,11 +200,9 @@ func DeleteProfile(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Profile not found or not authorized", http.StatusNotFound)
 		return
 	}
-
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// GetMyProfile returns the profile for the authenticated user including basic user info.
 func GetMyProfile(w http.ResponseWriter, r *http.Request) {
 	userID, err := utils.GetUserIDFromRequest(r)
 	if err != nil {
@@ -276,28 +215,27 @@ func GetMyProfile(w http.ResponseWriter, r *http.Request) {
 	var preferredGender pq.StringArray
 	var tags pq.StringArray
 	var firstName, lastName string
-	// location as WKT text
-	query := `
+	var locationText sqlNullString
+	var birthDate sqlNullString
+
+	row := config.DB.QueryRow(`
 		SELECT p.id, p.user_id, p.bio, p.gender, p.preferred_gender, p.birth_date,
-			   p.search_radius, p.tags, p.attributes::text, p.looking_for::text,
-			   p.profile_photos::text, ST_AsText(p.location), p.last_active, p.created_at, p.updated_at,
-			   u.first_name, u.last_name
+			p.search_radius, p.tags, p.attributes::text, p.looking_for::text,
+			p.profile_photos::text, ST_AsText(p.location), p.fame_rating, p.last_active, p.created_at, p.updated_at,
+			u.first_name, u.last_name
 		FROM profiles p
 		JOIN users u ON u.id = p.user_id
 		WHERE p.user_id = $1
-	`
-	row := config.DB.QueryRow(query, userID)
-	var locationText sqlNullString
-	var birthDate sqlNullString
+	`, userID)
+
 	err = row.Scan(&p.ID, &p.UserID, &p.Bio, &p.Gender, &preferredGender, &birthDate,
 		&p.SearchRadius, &tags, &attributesBytes, &lookingForBytes, &profilePhotosBytes,
-		&locationText, &p.LastActive, &p.CreatedAt, &p.UpdatedAt, &firstName, &lastName)
+		&locationText, &p.FameRating, &p.LastActive, &p.CreatedAt, &p.UpdatedAt, &firstName, &lastName)
 	if err != nil {
 		http.Error(w, "Profile not found: "+err.Error(), http.StatusNotFound)
 		return
 	}
 
-	// Map scanned values into model
 	p.PreferredGender = preferredGender
 	p.Tags = tags
 	if locationText.Valid {
@@ -307,7 +245,6 @@ func GetMyProfile(w http.ResponseWriter, r *http.Request) {
 		p.BirthDate = birthDate.String
 	}
 
-	// decode JSON text fields
 	var attrs map[string]interface{}
 	var looking map[string]interface{}
 	var photos []string
@@ -332,18 +269,14 @@ func GetMyProfile(w http.ResponseWriter, r *http.Request) {
 	}
 	p.ProfilePhotos = photos
 
-	// Build response containing user name and profile
-	resp := map[string]interface{}{
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
 		"profile":    p,
 		"first_name": firstName,
 		"last_name":  lastName,
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(resp)
+	})
 }
 
-// UploadProfilePhotos accepts multipart form images and appends their URLs to the user's profile_photos.
 func UploadProfilePhotos(w http.ResponseWriter, r *http.Request) {
 	userID, err := utils.GetUserIDFromRequest(r)
 	if err != nil {
@@ -351,9 +284,8 @@ func UploadProfilePhotos(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Parse multipart form (limit to 20MB)
 	if err := r.ParseMultipartForm(20 << 20); err != nil {
-		http.Error(w, "Failed to parse form: "+err.Error(), http.StatusBadRequest)
+		http.Error(w, "Failed to parse form", http.StatusBadRequest)
 		return
 	}
 
@@ -363,10 +295,29 @@ func UploadProfilePhotos(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Check existing photo count
+	var existingBytes []byte
+	config.DB.QueryRow("SELECT profile_photos::text FROM profiles WHERE user_id = $1", userID).Scan(&existingBytes)
+	var existing []string
+	if len(existingBytes) > 0 {
+		_ = json.Unmarshal(existingBytes, &existing)
+	}
+	if len(existing)+len(files) > 5 {
+		http.Error(w, "Maximum 5 photos allowed", http.StatusBadRequest)
+		return
+	}
+
 	uploadDir := "static/uploads"
 	if err := os.MkdirAll(uploadDir, 0o755); err != nil {
-		http.Error(w, "Failed to create upload dir: "+err.Error(), http.StatusInternalServerError)
+		http.Error(w, "Failed to create upload dir", http.StatusInternalServerError)
 		return
+	}
+
+	allowedTypes := map[string]bool{
+		"image/jpeg": true, "image/png": true, "image/gif": true, "image/webp": true,
+	}
+	extensions := map[string]string{
+		"image/jpeg": ".jpg", "image/png": ".png", "image/gif": ".gif", "image/webp": ".webp",
 	}
 
 	var newUrls []string
@@ -375,47 +326,59 @@ func UploadProfilePhotos(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			continue
 		}
-		defer f.Close()
 
-		ext := filepath.Ext(fh.Filename)
+		// Read first 512 bytes to detect MIME type
+		buffer := make([]byte, 512)
+		n, err := f.Read(buffer)
+		if err != nil && err != io.EOF {
+			f.Close()
+			continue
+		}
+		contentType := http.DetectContentType(buffer[:n])
+		if !allowedTypes[contentType] {
+			f.Close()
+			http.Error(w, "Only image files (JPEG, PNG, GIF, WebP) are allowed", http.StatusBadRequest)
+			return
+		}
+
+		// Seek back to start
+		if seeker, ok := f.(io.Seeker); ok {
+			seeker.Seek(0, io.SeekStart)
+		}
+
+		ext := extensions[contentType]
 		name := uuid.New().String() + ext
 		dstPath := filepath.Join(uploadDir, name)
 
 		out, err := os.Create(dstPath)
 		if err != nil {
+			f.Close()
 			continue
 		}
 		if _, err := io.Copy(out, f); err != nil {
 			out.Close()
+			f.Close()
 			continue
 		}
 		out.Close()
-
-		// Build relative URL for frontend
-		urlPath := "/static/uploads/" + name
-		newUrls = append(newUrls, urlPath)
+		f.Close()
+		newUrls = append(newUrls, "/static/uploads/"+name)
 	}
 
 	if len(newUrls) == 0 {
-		http.Error(w, "No files saved", http.StatusInternalServerError)
+		http.Error(w, "No valid image files saved", http.StatusBadRequest)
 		return
-	}
-
-	// Fetch existing photos
-	var existingBytes []byte
-	err = config.DB.QueryRow("SELECT profile_photos::text FROM profiles WHERE user_id = $1", userID).Scan(&existingBytes)
-	var existing []string
-	if err == nil && len(existingBytes) > 0 {
-		_ = json.Unmarshal(existingBytes, &existing)
 	}
 
 	merged := append(existing, newUrls...)
 	mergedBytes, _ := json.Marshal(merged)
 
-	// Update DB
-	_, err = config.DB.Exec("UPDATE profiles SET profile_photos = $1::jsonb, updated_at = NOW() WHERE user_id = $2", mergedBytes, userID)
+	_, err = config.DB.Exec(
+		"UPDATE profiles SET profile_photos = $1::jsonb, updated_at = NOW() WHERE user_id = $2",
+		mergedBytes, userID,
+	)
 	if err != nil {
-		http.Error(w, "Failed to update profile photos: "+err.Error(), http.StatusInternalServerError)
+		http.Error(w, "Failed to update profile photos", http.StatusInternalServerError)
 		return
 	}
 
@@ -423,7 +386,156 @@ func UploadProfilePhotos(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]any{"profile_photos": merged})
 }
 
-// sqlNullString is a tiny helper to scan nullable text from DB
+func DeleteProfilePhoto(w http.ResponseWriter, r *http.Request) {
+	userID, err := utils.GetUserIDFromRequest(r)
+	if err != nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	var req struct {
+		URL string `json:"url"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.URL == "" {
+		http.Error(w, "Photo URL required", http.StatusBadRequest)
+		return
+	}
+
+	var existingBytes []byte
+	config.DB.QueryRow("SELECT profile_photos::text FROM profiles WHERE user_id=$1", userID).Scan(&existingBytes)
+	var photos []string
+	if len(existingBytes) > 0 {
+		_ = json.Unmarshal(existingBytes, &photos)
+	}
+
+	var updated []string
+	found := false
+	for _, p := range photos {
+		if p != req.URL {
+			updated = append(updated, p)
+		} else {
+			found = true
+		}
+	}
+	cleanURL := path.Clean(req.URL)
+	if !found || cleanURL != req.URL || !strings.HasPrefix(req.URL, "/static/uploads/") {
+		http.Error(w, "Photo not found", http.StatusNotFound)
+		return
+	}
+
+	merged, _ := json.Marshal(updated)
+	config.DB.Exec("UPDATE profiles SET profile_photos=$1::jsonb, updated_at=NOW() WHERE user_id=$2", merged, userID)
+
+	// Remove physical file (ignore error if already gone)
+	os.Remove(filepath.Join("static", "uploads", filepath.Base(req.URL)))
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{"profile_photos": updated})
+}
+
+func GetProfile(w http.ResponseWriter, r *http.Request) {
+	userID, err := utils.GetUserIDFromRequest(r)
+	if err != nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	targetIDStr := chi.URLParam(r, "id")
+	targetID, err := strconv.Atoi(targetIDStr)
+	if err != nil {
+		http.Error(w, "Invalid profile ID", http.StatusBadRequest)
+		return
+	}
+
+	var profile models.Profile
+	var attributesBytes, lookingForBytes, profilePhotosBytes []byte
+	var preferredGender pq.StringArray
+	var tags pq.StringArray
+	var locationText sqlNullString
+	var birthDate sqlNullString
+
+	err = config.DB.QueryRow(`
+		SELECT id, user_id, bio, gender, preferred_gender, birth_date, search_radius, tags,
+			ST_AsText(location) as location, attributes::text, looking_for::text, profile_photos::text,
+			fame_rating, last_active, created_at, updated_at
+		FROM profiles WHERE id = $1
+	`, targetID).Scan(
+		&profile.ID, &profile.UserID, &profile.Bio, &profile.Gender, &preferredGender, &birthDate,
+		&profile.SearchRadius, &tags, &locationText, &attributesBytes, &lookingForBytes,
+		&profilePhotosBytes, &profile.FameRating, &profile.LastActive, &profile.CreatedAt,
+		&profile.UpdatedAt,
+	)
+	if err != nil {
+		http.Error(w, "Profile not found", http.StatusNotFound)
+		return
+	}
+	profile.PreferredGender = preferredGender
+	profile.Tags = tags
+	if birthDate.Valid {
+		profile.BirthDate = birthDate.String
+	}
+	if locationText.Valid {
+		profile.Location = locationText.String
+	}
+	if len(attributesBytes) > 0 {
+		_ = json.Unmarshal(attributesBytes, &profile.Attributes)
+	}
+	if profile.Attributes == nil {
+		profile.Attributes = map[string]interface{}{}
+	}
+	if len(lookingForBytes) > 0 {
+		_ = json.Unmarshal(lookingForBytes, &profile.LookingFor)
+	}
+	if profile.LookingFor == nil {
+		profile.LookingFor = map[string]interface{}{}
+	}
+	if len(profilePhotosBytes) > 0 {
+		var photos []string
+		_ = json.Unmarshal(profilePhotosBytes, &photos)
+		profile.ProfilePhotos = photos
+	}
+
+	// Determine online status (active within last 5 minutes)
+	lastActive, _ := time.Parse(time.RFC3339, profile.LastActive)
+	profile.IsOnline = time.Since(lastActive) < 5*time.Minute
+
+	// Record view notification and adjust fame if viewing someone else
+	if profile.UserID != userID {
+		CreateNotification(profile.UserID, &userID, "view", "Someone viewed your profile")
+		utils.AdjustFame(profile.UserID, 1)
+	}
+
+	// Determine relationship status between viewer and profile owner
+	relStatus := "none"
+	config.DB.QueryRow(`
+		SELECT
+			CASE
+				WHEN EXISTS (
+					SELECT 1 FROM matches
+					WHERE ((user1_id=$1 AND user2_id=$2) OR (user1_id=$2 AND user2_id=$1))
+					  AND status='accepted'
+				) THEN 'connected'
+				WHEN EXISTS (
+					SELECT 1 FROM matches
+					WHERE user1_id=LEAST($1,$2) AND user2_id=GREATEST($1,$2)
+					  AND status='pending'
+				) THEN 'pending'
+				WHEN EXISTS (
+					SELECT 1 FROM notifications
+					WHERE user_id=$1 AND sender_id=$2 AND type='like'
+				) THEN 'liked_you'
+				ELSE 'none'
+			END
+	`, userID, profile.UserID).Scan(&relStatus)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"profile":         profile,
+		"relation_status": relStatus,
+	})
+}
+
+// sqlNullString scans nullable text from DB
 type sqlNullString struct {
 	String string
 	Valid  bool
@@ -443,39 +555,4 @@ func (n *sqlNullString) Scan(value interface{}) error {
 		n.String, n.Valid = "", false
 	}
 	return nil
-}
-
-func GetProfile(w http.ResponseWriter, r *http.Request) {
-	userID, err := utils.GetUserIDFromRequest(r)
-	if err != nil {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
-		return
-	}
-
-	targetIDStr := chi.URLParam(r, "id")
-	targetID, err := strconv.Atoi(targetIDStr)
-	if err != nil {
-		http.Error(w, "Invalid profile ID", http.StatusBadRequest)
-		return
-	}
-
-	var profile models.Profile
-	// Use ST_AsText for location to avoid binary output issues if it's geometry
-	err = config.DB.Get(&profile, `
-		SELECT id, user_id, bio, gender, preferred_gender, birth_date, search_radius, tags,
-		ST_AsText(location) as location, attributes, looking_for, profile_photos, last_active, created_at, updated_at
-		FROM profiles WHERE id = $1
-	`, targetID)
-	if err != nil {
-		http.Error(w, "Profile not found", http.StatusNotFound)
-		return
-	}
-
-	// Trigger notification if viewing someone else's profile
-	if profile.UserID != userID {
-		CreateNotification(profile.UserID, &userID, "view", "Someone viewed your profile")
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(profile)
 }

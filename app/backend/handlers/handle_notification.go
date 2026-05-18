@@ -45,7 +45,7 @@ func GetNotifications(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var notifications []models.Notification
+	notifications := make([]models.Notification, 0)
 	query := `
 		SELECT n.*, (u.first_name || ' ' || u.last_name) as sender_name
 		FROM notifications n
