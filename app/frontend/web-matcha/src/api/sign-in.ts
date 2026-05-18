@@ -1,7 +1,7 @@
 import { api } from '@/libs/axios'
 
 interface SignInProps {
-	email: string
+	username: string
 	password: string
 	strategy?: string
 }
@@ -14,9 +14,9 @@ export interface SignInResponse {
 	}
 }
 
-export async function signIn({ email, password, strategy = 'local' }: SignInProps) {
+export async function signIn({ username, password, strategy = 'local' }: SignInProps) {
 	const response = await api.post<SignInResponse>('/login', {
-		email,
+		username,
 		password,
 		strategy,
 	})

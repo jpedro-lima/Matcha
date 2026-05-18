@@ -37,6 +37,8 @@ func ReportUser(w http.ResponseWriter, r *http.Request) {
         return
     }
 
+    utils.AdjustFame(body.TargetUserID, -15)
+
     // Count reports for target
     var count int
     _ = config.DB.QueryRow(`SELECT COUNT(*) FROM reports WHERE target_id = $1`, body.TargetUserID).Scan(&count)

@@ -5,6 +5,8 @@ export interface SuggestedProfile {
   bio: string
   gender: string
   profile_photos: string // first photo url or empty
+  fame_rating: number
+  tags: string[]
 }
 
 export async function getSuggestedProfile(token: string) {

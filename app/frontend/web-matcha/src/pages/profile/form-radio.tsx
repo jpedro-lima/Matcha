@@ -1,6 +1,6 @@
 import { Label } from '@/components/ui/label'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
-import type { ProfileFormType } from './profile'
+import type { ProfileFormType } from './profile-form'
 import { Controller, type Control } from 'react-hook-form'
 
 type FormRadioType = {

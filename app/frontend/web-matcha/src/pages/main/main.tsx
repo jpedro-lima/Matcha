@@ -1,24 +1,10 @@
 import { CarouselImages } from '@/components/carousel-images'
 import { HandHeart, HeartHandshake, HeartOff, MapPin, Minus, Loader2 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { getSuggestedProfile, type SuggestedProfile } from '@/api/get-match'
+import { browseProfiles, type BrowseProfile, type BrowseParams } from '@/api/browse'
 import { swipeLike, type SwipeResponse } from '@/api/swipe'
 import { unmatchByProfile } from '@/api/unmatch'
 import { toast } from 'sonner'
-
-// interface User {
-// 	firstName: string
-// 	lastName: string
-// 	fame: number
-// 	bio: string
-// 	tags: string[]
-// 	images: { url: string; size: string }[]
-// 	location: {
-// 		city: string
-// 		latitude?: number
-// 		longitude?: number
-// 	}
-// }
 
 import pretty from '@/_images/pretty-woman.jpg'
 import photo from '@/_images/horizontal-photo.webp'
@@ -26,7 +12,8 @@ import woman from '@/_images/woman-peb.jpg'
 import { MainBio } from './main-bio'
 import { MainTags } from './main-tags'
 
-// Helper to map backend photo string into carousel entries (backend returns only first photo in profile_photos)
+const API_URL = (import.meta.env.VITE_API_URL as string | undefined) ?? 'http://localhost:8080'
+
 function buildImages(firstPhoto?: string) {
 	const fallback = [
 		{ url: pretty, size: 'sm:h-[500px]' },
@@ -34,10 +21,18 @@ function buildImages(firstPhoto?: string) {
 		{ url: woman, size: 'sm:h-[625px]' },
 	]
 	if (!firstPhoto) return fallback
-	return [
-		{ url: firstPhoto, size: 'sm:h-[500px]' },
-		...fallback.slice(1),
-	]
+	const url = firstPhoto.startsWith('http') ? firstPhoto : `${API_URL}${firstPhoto}`
+	return [{ url, size: 'sm:h-[500px]' }, ...fallback.slice(1)]
+}
+
+function loadSavedParams(): BrowseParams {
+	try {
+		const raw = localStorage.getItem('browseParams')
+		if (raw) return JSON.parse(raw) as BrowseParams
+	} catch {
+		// ignore
+	}
+	return { min_age: 18, max_age: 99, min_fame: 0, max_fame: 100, sort_by: 'fame', sort_dir: 'desc', tags: '' }
 }
 
 interface DisplayProfile {
@@ -51,147 +46,152 @@ interface DisplayProfile {
 	location: { city: string }
 }
 
+function mapBrowse(data: BrowseProfile): DisplayProfile {
+	return {
+		id: data.id,
+		firstName: 'Profile',
+		lastName: `#${data.id}`,
+		bio: data.bio || 'No bio provided',
+		fame: data.fame_rating ?? 0,
+		tags: data.tags ?? [],
+		images: buildImages(data.profile_photos),
+		location: { city: 'Nearby' },
+	}
+}
+
 export function Main() {
 	const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') || '' : ''
 	const [loading, setLoading] = useState(false)
-		const [current, setCurrent] = useState<DisplayProfile | null>(null)
-		const [queue, setQueue] = useState<DisplayProfile[]>([])
-				const [lastMatchedProfileId, setLastMatchedProfileId] = useState<number | null>(null)
+	const [current, setCurrent] = useState<DisplayProfile | null>(null)
+	const [queue, setQueue] = useState<DisplayProfile[]>([])
+	const [lastMatchedProfileId, setLastMatchedProfileId] = useState<number | null>(null)
 	const [error, setError] = useState<string | null>(null)
+	const [activeFilters, setActiveFilters] = useState<BrowseParams>({})
 
-		const mapSuggested = (data: SuggestedProfile): DisplayProfile => ({
-			id: data.id,
-			firstName: 'Match',
-			lastName: `#${data.id}`,
-			bio: data.bio || 'No bio provided',
-			fame: 0,
-			tags: [],
-			images: buildImages(data.profile_photos),
-			location: { city: 'Nearby' },
-		})
-
-		const fetchOne = useCallback(async (): Promise<DisplayProfile | null> => {
-			try {
-				const data: SuggestedProfile = await getSuggestedProfile(token)
-				return mapSuggested(data)
-				} catch {
-				return null
-			}
-		}, [token])
-
-		const topUpQueue = useCallback(async (desired = 3) => {
-			if (!token) return
-			setLoading(true)
-			try {
-				const needed = Math.max(0, desired - queue.length)
-				const promises = Array.from({ length: needed }, () => fetchOne())
-				const results = (await Promise.all(promises)).filter(Boolean) as DisplayProfile[]
-				if (results.length) setQueue(prev => [...prev, ...results])
-			} finally {
-				setLoading(false)
-			}
-		}, [fetchOne, queue.length, token])
-
-		const advance = useCallback(() => {
-			setQueue(prev => {
-				const [, ...rest] = prev
-				return rest
-			})
-		}, [])
-
-		const prime = useCallback(async () => {
+	const prime = useCallback(async () => {
 		if (!token) {
 			setError('Missing auth token – please sign in.')
 			return
 		}
 		setLoading(true)
 		setError(null)
+		const params = loadSavedParams()
+		setActiveFilters(params)
 		try {
-				// Fetch initial batch (4: current + 3 queued)
-				const promises = Array.from({ length: 4 }, () => fetchOne())
-				const results = (await Promise.all(promises)).filter(Boolean) as DisplayProfile[]
-				if (!results.length) {
-					setCurrent(null)
-					setError('No profiles available')
-					return
-				}
-				setCurrent(results[0])
-				setQueue(results.slice(1))
-				} catch (e: unknown) {
-					let message = 'Failed to load profile'
-					if (typeof e === 'object' && e !== null) {
-						// Axios error shape
-						const maybeResp = e as { response?: { data?: string } }
-						if (maybeResp.response?.data) message = String(maybeResp.response.data)
-						else if ('message' in e) message = String((e as { message?: string }).message || message)
-					}
-					setError(message)
+			const data = await browseProfiles(params)
+			if (!data.length) {
+				setCurrent(null)
+				setError('No profiles match your current filters. Try adjusting them in Search.')
+				return
+			}
+			const profiles = data.map(mapBrowse)
+			setCurrent(profiles[0])
+			setQueue(profiles.slice(1))
+		} catch (e: unknown) {
+			let message = 'Failed to load profiles'
+			if (typeof e === 'object' && e !== null) {
+				const maybeResp = e as { response?: { data?: string } }
+				if (maybeResp.response?.data) message = String(maybeResp.response.data)
+				else if ('message' in e) message = String((e as { message?: string }).message || message)
+			}
+			setError(message)
 			setCurrent(null)
 		} finally {
 			setLoading(false)
 		}
-		}, [fetchOne, token])
+	}, [token])
 
-		useEffect(() => {
+	useEffect(() => {
+		prime()
+	}, [prime])
+
+	const showNext = useCallback(() => {
+		if (queue.length > 0) {
+			setCurrent(queue[0])
+			setQueue((prev) => prev.slice(1))
+		} else {
+			setCurrent(null)
 			prime()
-		}, [prime])
+		}
+	}, [queue, prime])
 
-		const showNext = useCallback(() => {
-				setCurrent(queue[0] || null)
-			advance()
-			// Top up queue after advancing
-			void topUpQueue(3)
-		}, [advance, queue, topUpQueue])
+	const resetFiltersAndPrime = useCallback(() => {
+		localStorage.removeItem('browseParams')
+		setActiveFilters({})
+		prime()
+	}, [prime])
 
-		const handleLike = async () => {
-			if (!current) return
-			try {
-				const res: SwipeResponse = await swipeLike(token, current.id)
-						if (res.status.includes('created')) {
-							toast.success('Like sent (pending)')
-						setLastMatchedProfileId(null)
-						} else if (res.status.includes('accepted')) {
-							toast.success('It\'s a match!')
-							// Use current.id as the target profile id; backend returns accepted when reciprocal
-						setLastMatchedProfileId(current.id)
-						} else {
-							toast.message(res.status)
-						}
-				showNext()
-			} catch {
-				toast.error('Failed to like')
+	const handleLike = async () => {
+		if (!current) return
+		try {
+			const res: SwipeResponse = await swipeLike(token, current.id)
+			if (res.status.includes('created')) {
+				toast.success('Like sent')
+				setLastMatchedProfileId(null)
+			} else if (res.status.includes('accepted')) {
+				toast.success("It's a match!")
+				setLastMatchedProfileId(current.id)
+			} else {
+				toast.message(res.status)
 			}
-		}
-
-		const handleDislike = () => {
-			toast.message('Skipped')
 			showNext()
+		} catch (e: unknown) {
+			const msg =
+				(e as { response?: { data?: string } })?.response?.data?.trim() ||
+				'Failed to like'
+			toast.error(msg)
 		}
+	}
+
+	const handleDislike = () => {
+		toast.message('Skipped')
+		showNext()
+	}
 
 	const images = useMemo(() => current?.images || buildImages(), [current])
+
+	const hasFilters =
+		activeFilters.tags ||
+		(activeFilters.min_age && activeFilters.min_age !== 18) ||
+		(activeFilters.max_age && activeFilters.max_age !== 99) ||
+		(activeFilters.min_fame && activeFilters.min_fame !== 0) ||
+		(activeFilters.max_fame && activeFilters.max_fame !== 100)
 
 	return (
 		<main className="grid h-full w-full md:grid-cols-2">
 			<section className="order-1 mt-2.5 self-center sm:order-0">
 				{loading ? (
-					<div className="flex h-[500px] items-center justify-center"><Loader2 className="size-12 animate-spin text-rose-700" /></div>
+					<div className="flex h-[500px] items-center justify-center">
+						<Loader2 className="size-12 animate-spin text-rose-700" />
+					</div>
 				) : current ? (
 					<CarouselImages images={images} />
 				) : (
 					<div className="flex h-[500px] flex-col items-center justify-center gap-4 text-center">
 						<p className="text-muted-foreground">{error || 'No profiles available right now.'}</p>
-									<button onClick={prime} className="rounded bg-rose-700 px-4 py-2 text-white hover:bg-rose-800">Try again</button>
+						<button
+							onClick={hasFilters ? resetFiltersAndPrime : prime}
+							className="rounded bg-rose-700 px-4 py-2 text-white hover:bg-rose-800"
+						>
+							{hasFilters ? 'Reset filters' : 'Try again'}
+						</button>
 					</div>
 				)}
 			</section>
 
 			<section className="sm:bg-muted flex flex-col overflow-hidden sm:ml-[4rem]">
+				{hasFilters && (
+					<p className="mx-auto mt-2 text-xs text-muted-foreground">
+						Filters active — adjust in Search
+					</p>
+				)}
 				{current && (
 					<div className="flex w-82 flex-col self-center p-4 sm:my-auto sm:ml-12 sm:w-9/12 sm:self-start">
 						<header className="flex flex-col items-end">
-							<h1 className="font-markazi text-muted-foreground text-3xl">{`${current.firstName} ${current.lastName} `}</h1>
+							<h1 className="font-markazi text-muted-foreground text-3xl">
+								{`${current.firstName} ${current.lastName} `}
+							</h1>
 							<Minus className="my-[-15px] mr-[-5px] size-8 text-rose-700" />
-
 							<div className="font-markazi flex gap-4">
 								<span className="flex items-center gap-1 text-xl">
 									<MapPin size={18} className="text-rose-700" />
@@ -210,6 +210,7 @@ export function Main() {
 						</div>
 					</div>
 				)}
+
 				<div className="flex justify-between align-bottom">
 					<button
 						onClick={handleDislike}
@@ -232,24 +233,25 @@ export function Main() {
 						</div>
 					</button>
 				</div>
-								{lastMatchedProfileId && (
-							<div className="mx-auto mt-6">
-								<button
-									onClick={async () => {
-										try {
-													await unmatchByProfile(token, lastMatchedProfileId)
-											toast.message('Match undone')
-													setLastMatchedProfileId(null)
-										} catch {
-											toast.error('Failed to unmatch')
-										}
-									}}
-									className="rounded border border-rose-700 px-4 py-2 text-sm text-rose-700 hover:bg-rose-700 hover:text-white dark:border-rose-400 dark:text-rose-400 dark:hover:bg-rose-400 dark:hover:text-neutral-900"
-								>
-									Undo last match
-								</button>
-							</div>
-						)}
+
+				{lastMatchedProfileId && (
+					<div className="mx-auto mt-6">
+						<button
+							onClick={async () => {
+								try {
+									await unmatchByProfile(token, lastMatchedProfileId)
+									toast.message('Match undone')
+									setLastMatchedProfileId(null)
+								} catch {
+									toast.error('Failed to unmatch')
+								}
+							}}
+							className="rounded border border-rose-700 px-4 py-2 text-sm text-rose-700 hover:bg-rose-700 hover:text-white dark:border-rose-400 dark:text-rose-400 dark:hover:bg-rose-400 dark:hover:text-neutral-900"
+						>
+							Undo last match
+						</button>
+					</div>
+				)}
 			</section>
 		</main>
 	)

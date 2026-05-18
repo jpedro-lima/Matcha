@@ -11,7 +11,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { toast } from 'sonner'
 
 const signInSchema = z.object({
-	email: z.string().email(),
+	username: z.string().nonempty('Please enter your username'),
 	password: z.string().nonempty('Please enter your password'),
 })
 
@@ -27,7 +27,7 @@ export function SignIn() {
 	})
 
 	function handleSignIn(data: SignInForm) {
-		if (data.password) toast.success('Senha existe')
+		if (data.username && data.password) toast.success('Senha existe')
 		else toast.error('Passwords not matching')
 	}
 
@@ -45,9 +45,9 @@ export function SignIn() {
 						<div className="flex justify-between">
 							<Input
 								id="email"
-								type="email"
-								placeholder="E-mail"
-								{...register('email')}
+								type="text"
+								placeholder="Username"
+								{...register('username')}
 							/>
 							<Label htmlFor="email" className="border-b border-b-rose-700">
 								<User size={24} className="text-muted-foreground" />

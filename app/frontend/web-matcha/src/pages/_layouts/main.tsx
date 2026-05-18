@@ -7,6 +7,7 @@ import {
 	MessageCircleHeart,
 	CircleUserRound,
 	LogOut,
+	Search,
 } from 'lucide-react'
 import { ThemeToggle } from '@/components/theme/theme-toggle'
 import { Button } from '@/components/ui/button'
@@ -88,6 +89,13 @@ export function MainLayout() {
 						className={({ isActive }) => (isActive ? 'text-rose-700' : '')}
 					>
 						<Earth size={30} />
+					</NavLink>
+
+					<NavLink
+						to="/search"
+						className={({ isActive }) => (isActive ? 'text-rose-700' : '')}
+					>
+						<Search size={30} />
 					</NavLink>
 
 					<NavLink

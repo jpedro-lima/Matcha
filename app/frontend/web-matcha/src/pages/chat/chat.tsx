@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { ChatWindow } from './chat-window'
 import { api } from '@/libs/axios'
+import { env } from '@/env'
 
 type MatchItem = {
 	match_id: number
@@ -12,6 +13,7 @@ type MatchItem = {
 
 export function Chat() {
 	const [matches, setMatches] = useState<MatchItem[]>([])
+	const [selectedMatch, setSelectedMatch] = useState<MatchItem | null>(null)
 	const [loading, setLoading] = useState(false)
 
 	useEffect(() => {
@@ -19,7 +21,16 @@ export function Chat() {
 			setLoading(true)
 			try {
 				const res = await api.get('/matches/list')
-				setMatches(res.data || [])
+				const acceptedMatches = (res.data || []).filter(
+					(match: MatchItem) => match.status === 'accepted',
+				)
+				setMatches(acceptedMatches)
+
+				const lastMatchId = localStorage.getItem('lastMatchId')
+				const lastMatch = acceptedMatches.find(
+					(match: MatchItem) => String(match.match_id) === lastMatchId,
+				)
+				if (lastMatch) setSelectedMatch(lastMatch)
 			} catch (e) {
 				console.error('Failed loading matches', e)
 			} finally {
@@ -31,39 +42,53 @@ export function Chat() {
 
 	const selectMatch = (m: MatchItem) => {
 		localStorage.setItem('lastMatchId', String(m.match_id))
-		// notify ChatWindow
-		window.dispatchEvent(new CustomEvent('match-select', { detail: { match_id: m.match_id, other_user_id: m.other_user_id } }))
+		setSelectedMatch(m)
 	}
 
 	return (
 		<main className="grid h-full w-full md:grid-cols-[70%_30%]">
 			<section className="flex flex-1 justify-center py-2">
-				<ChatWindow />
+				<ChatWindow selectedMatch={selectedMatch} />
 			</section>
 
 			<aside className="sm:bg-muted flex flex-col gap-2 overflow-auto p-4">
 				{loading ? (
 					<div>Loading...</div>
-				) : matches.filter((m) => m.status === 'accepted').length === 0 ? (
-					<div className="text-sm text-muted-foreground">No matches yet.</div>
+				) : matches.length === 0 ? (
+					<div className="text-muted-foreground text-sm">No matches yet.</div>
 				) : (
 					<ul className="flex flex-col gap-2">
-						{matches
-							.filter((m) => m.status === 'accepted')
-							.map((m) => (
+						{matches.map((m) => {
+							const isSelected = selectedMatch?.match_id === m.match_id
+							const photo = m.first_photo
+								? `${env.VITE_API_URL}${m.first_photo}`
+								: '/vite.svg'
+
+							return (
 								<li key={m.match_id}>
 									<button
 										onClick={() => selectMatch(m)}
-										className="flex w-full items-center gap-3 rounded-md px-2 py-2 text-left hover:bg-muted"
+										className={`flex w-full items-center gap-3 rounded-md px-2 py-2 text-left transition-colors ${
+											isSelected ? 'bg-rose-100 text-rose-950' : 'hover:bg-muted'
+										}`}
 									>
-										<img src={m.first_photo || '/vite.svg'} alt={m.name} className="h-10 w-10 rounded-full object-cover" />
-										<div className="flex flex-col">
-											<span className="font-medium">{m.name || `User ${m.other_user_id}`}</span>
-											<span className="text-xs text-muted-foreground">match #{m.match_id}</span>
+										<img
+											src={photo}
+											alt={m.name || `User ${m.other_user_id}`}
+											className="h-10 w-10 rounded-full object-cover"
+										/>
+										<div className="flex min-w-0 flex-col">
+											<span className="truncate font-medium">
+												{m.name || `User ${m.other_user_id}`}
+											</span>
+											<span className="text-muted-foreground text-xs">
+												{isSelected ? 'Current chat' : `match #${m.match_id}`}
+											</span>
 										</div>
 									</button>
 								</li>
-							))}
+							)
+						})}
 					</ul>
 				)}
 			</aside>
