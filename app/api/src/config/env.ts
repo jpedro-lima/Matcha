@@ -16,11 +16,11 @@ const envSchema = z.object({
 	JWT_ACCESS_EXPIRES: z.string().default('15m'),
 	JWT_REFRESH_EXPIRES: z.string().default('7d'),
 
-	// SMTP_HOST: z.string().min(1),
-	// SMTP_PORT: z.coerce.number().int().positive(),
-	// SMTP_USER: z.string().min(1),
-	// SMTP_PASS: z.string().min(1),
-	// SMTP_FROM: z.email(),
+	SMTP_HOST: z.string().min(1),
+	SMTP_PORT: z.coerce.number().int().positive(),
+	SMTP_USER: z.string().min(1),
+	SMTP_PASS: z.string().min(1),
+	SMTP_FROM: z.email(),
 
 	// UPLOAD_DIR: z.string().min(1),
 	// MAX_PHOTO_SIZE_MB: z.coerce.number().int().positive().default(5),

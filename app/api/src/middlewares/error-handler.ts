@@ -1,6 +1,6 @@
 import type { ErrorRequestHandler, RequestHandler } from 'express'
 import { env } from '../config/env.js'
-import { AppError, isAppError } from '../utils/AppError.js'
+import { AppError, isAppError } from '../utils/app-error.js'
 
 type ErrorBody = {
 	error: {

@@ -1,6 +1,6 @@
 import type { RequestHandler } from 'express'
 import type { ZodType } from 'zod'
-import { AppError } from '../utils/AppError.js'
+import { AppError } from '../utils/app-error.js'
 
 type Schemas = {
 	body?: ZodType

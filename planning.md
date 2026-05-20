@@ -122,9 +122,10 @@ docker compose exec db psql -U matcha -d matcha_db -c '\d email_tokens'
 
 ### Fase 4.2 — Serviços e middlewares de auth (TDD, sem rotas ainda)
 
-**Instalar (delta da fase):** `zxcvbn`, `jsonwebtoken` + `@types/jsonwebtoken`, `nodemailer` + `@types/nodemailer`.
+**Instalar (delta da fase):** , `jsonwebtoken` + `@types/jsonwebtoken`, `nodemailer` + `@types/nodemailer`.
 
-Cada módulo abaixo segue o ciclo **Red → Green → Refactor**. Os testes ficam co-localizados (`src/services/<name>.test.ts`).
+Cada módulo abaixo segue o ciclo **Red → Green → Refactor**. Os testes ficam co-localizados (`src/services/tests/<nome>.spec.ts`).
+As senhas devem conter número, caractere, e simbolo validados via zod regex.
 
 27. **`passwordService`** —
     - 🔴 `passwordService.test.ts`: `hashPassword` retorna string diferente do input; `verifyPassword(hash, plain)` é `true` e contra senha errada é `false`; rounds ≥ 12 (inspecionar prefixo bcrypt).

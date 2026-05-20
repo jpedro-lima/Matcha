@@ -4,10 +4,9 @@ import cors from 'cors'
 import express from 'express'
 import helmet from 'helmet'
 import { env } from './config/env.js'
-import { errorHandler, notFoundHandler } from './middlewares/errorHandler.js'
-import { httpLogger } from './middlewares/httpLogger.js'
+import { errorHandler, notFoundHandler } from './middlewares/error-handler.js'
+import { httpLogger } from './middlewares/http-logger.js'
 import { healthRouter } from './routes/health.js'
-import { testRouter } from './routes/_test.js'
 
 export const createApp = (): express.Express => {
 	const app = express()
@@ -23,7 +22,6 @@ export const createApp = (): express.Express => {
 	app.use(express.urlencoded({ extended: false }))
 
 	app.use(healthRouter)
-	app.use(testRouter)
 
 	app.use(notFoundHandler)
 	app.use(errorHandler)
