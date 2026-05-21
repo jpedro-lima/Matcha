@@ -16,12 +16,12 @@ export const requireAuth: RequestHandler = (req: Request, _res: Response, next: 
 	const header = req.headers.authorization
 
 	if (!header) {
-		return next(new AppError('MISSING_TOKEN', 401, 'Token de autenticação ausente.'))
+		return next(new AppError('MISSING_TOKEN', 401, 'Authentication token is missing.'))
 	}
 
 	if (!header.toLowerCase().startsWith(BEARER_PREFIX)) {
 		return next(
-			new AppError('INVALID_TOKEN', 401, 'Authorization deve usar esquema Bearer.'),
+			new AppError('INVALID_TOKEN', 401, 'Authorization must use the Bearer scheme.'),
 		)
 	}
 
@@ -32,6 +32,6 @@ export const requireAuth: RequestHandler = (req: Request, _res: Response, next: 
 		req.user = { id: payload.sub, username: payload.username }
 		return next()
 	} catch {
-		return next(new AppError('INVALID_TOKEN', 401, 'Token inválido ou expirado.'))
+		return next(new AppError('INVALID_TOKEN', 401, 'Invalid or expired token.'))
 	}
 }

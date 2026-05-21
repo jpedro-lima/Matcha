@@ -45,7 +45,7 @@ export const validate = (schemas: Schemas): RequestHandler => {
 
 		if (details.length > 0) {
 			return next(
-				new AppError('VALIDATION_ERROR', 400, 'Os dados enviados não passaram na validação.', details),
+				new AppError('VALIDATION_ERROR', 400, 'Request body did not pass validation.', details),
 			)
 		}
 

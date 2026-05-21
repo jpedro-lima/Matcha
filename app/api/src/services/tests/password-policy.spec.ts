@@ -3,15 +3,15 @@ import { AppError } from '../../utils/app-error.js'
 import { assertStrongPassword } from '../password-policy.js'
 
 describe('passwordPolicy', () => {
-	describe('rejeita senhas fracas', () => {
-		it('lança WEAK_PASSWORD para senha curta (< 8 chars)', () => {
+	describe('rejects weak passwords', () => {
+		it('throws WEAK_PASSWORD for short password (< 8 chars)', () => {
 			expect(() => assertStrongPassword('Ab1!')).toThrow(AppError)
 		})
 
-		it('lança WEAK_PASSWORD para senha só com letras', () => {
+		it('throws WEAK_PASSWORD for letters-only password', () => {
 			try {
-				assertStrongPassword('apenasletras')
-				expect.fail('deveria ter lançado')
+				assertStrongPassword('lettersonly')
+				expect.fail('should have thrown')
 			} catch (err) {
 				expect(err).toBeInstanceOf(AppError)
 				expect((err as AppError).code).toBe('WEAK_PASSWORD')
@@ -19,22 +19,22 @@ describe('passwordPolicy', () => {
 			}
 		})
 
-		it('lança WEAK_PASSWORD quando falta número', () => {
-			expect(() => assertStrongPassword('SemNumero!')).toThrow(AppError)
+		it('throws WEAK_PASSWORD when number is missing', () => {
+			expect(() => assertStrongPassword('NoNumber!')).toThrow(AppError)
 		})
 
-		it('lança WEAK_PASSWORD quando falta símbolo', () => {
-			expect(() => assertStrongPassword('SemSimbolo123')).toThrow(AppError)
+		it('throws WEAK_PASSWORD when symbol is missing', () => {
+			expect(() => assertStrongPassword('NoSymbol123')).toThrow(AppError)
 		})
 
-		it('lança WEAK_PASSWORD quando falta letra', () => {
+		it('throws WEAK_PASSWORD when letter is missing', () => {
 			expect(() => assertStrongPassword('12345678!@')).toThrow(AppError)
 		})
 
-		it('expõe regras quebradas em `details`', () => {
+		it('exposes broken rules in `details`', () => {
 			try {
 				assertStrongPassword('abc')
-				expect.fail('deveria ter lançado')
+				expect.fail('should have thrown')
 			} catch (err) {
 				expect(err).toBeInstanceOf(AppError)
 				const details = (err as AppError).details
@@ -44,11 +44,11 @@ describe('passwordPolicy', () => {
 		})
 	})
 
-	describe('aceita senhas fortes', () => {
+	describe('accepts strong passwords', () => {
 		it.each(['Forte#2026!', 'M@tcha2026!', 'P4ss!word-Ok', 'X#1aaaaaa'])(
-			'aceita %s',
-			(senha) => {
-				expect(() => assertStrongPassword(senha)).not.toThrow()
+			'accepts %s',
+			(password) => {
+				expect(() => assertStrongPassword(password)).not.toThrow()
 			},
 		)
 	})

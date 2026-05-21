@@ -40,9 +40,9 @@ export function sendVerificationEmail(to: string, token: string): Promise<void> 
 	const url = verifyUrl(token)
 	return send({
 		to,
-		subject: 'Confirme seu e-mail no Matcha',
-		text: `Confirme seu e-mail clicando no link: ${url}\n\nO link expira em 24h.`,
-		html: `<p>Confirme seu e-mail clicando no link abaixo.</p><p><a href="${url}">${url}</a></p><p>O link expira em 24h.</p>`,
+		subject: 'Confirm your Matcha email',
+		text: `Confirm your email by clicking the link: ${url}\n\nThe link expires in 24h.`,
+		html: `<p>Confirm your email by clicking the link below.</p><p><a href="${url}">${url}</a></p><p>The link expires in 24h.</p>`,
 	})
 }
 
@@ -50,8 +50,8 @@ export function sendPasswordResetEmail(to: string, token: string): Promise<void>
 	const url = resetUrl(token)
 	return send({
 		to,
-		subject: 'Redefinição de senha no Matcha',
-		text: `Para redefinir sua senha, acesse: ${url}\n\nO link expira em 1h. Se não foi você, ignore este e-mail.`,
-		html: `<p>Para redefinir sua senha, acesse o link abaixo.</p><p><a href="${url}">${url}</a></p><p>O link expira em 1h. Se não foi você, ignore este e-mail.</p>`,
+		subject: 'Matcha password reset',
+		text: `To reset your password, open: ${url}\n\nThe link expires in 1h. If this was not you, ignore this email.`,
+		html: `<p>To reset your password, open the link below.</p><p><a href="${url}">${url}</a></p><p>The link expires in 1h. If this was not you, ignore this email.</p>`,
 	})
 }

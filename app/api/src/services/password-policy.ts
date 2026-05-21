@@ -1,16 +1,10 @@
-import { z } from 'zod'
+import { passwordSchema } from '../validators/password-schema.js'
 import { AppError } from '../utils/app-error.js'
 
-// Política de senha: mínimo 8 chars + ao menos uma letra, um número e um
-// símbolo (qualquer não-alfanumérico). Sem dicionário/zxcvbn — validação 100%
-// regex via Zod, conforme convenção do projeto.
-
-const passwordSchema = z
-	.string()
-	.min(8, 'must be at least 8 characters long')
-	.regex(/[A-Za-z]/, 'must contain at least one letter')
-	.regex(/[0-9]/, 'must contain at least one number')
-	.regex(/[^A-Za-z0-9]/, 'must contain at least one symbol')
+// Defense-in-depth: roda o mesmo `passwordSchema` que o `validate` middleware
+// usa nos bodies de register/reset, mas mapeia falhas para `WEAK_PASSWORD` 422
+// em vez de `VALIDATION_ERROR` 400. Necessário para entry points que NÃO
+// passam pela camada HTTP (jobs, CLI, testes diretos do service).
 
 export function assertStrongPassword(plain: string): void {
 	const result = passwordSchema.safeParse(plain)
@@ -20,7 +14,7 @@ export function assertStrongPassword(plain: string): void {
 	throw new AppError(
 		'WEAK_PASSWORD',
 		422,
-		'A senha não atende aos requisitos de segurança.',
+		'Password does not meet the security requirements.',
 		details,
 	)
 }

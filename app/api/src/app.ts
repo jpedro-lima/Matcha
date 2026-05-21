@@ -6,6 +6,7 @@ import helmet from 'helmet'
 import { env } from './config/env.js'
 import { errorHandler, notFoundHandler } from './middlewares/error-handler.js'
 import { httpLogger } from './middlewares/http-logger.js'
+import { authRouter } from './routes/auth.js'
 import { healthRouter } from './routes/health.js'
 
 export const createApp = (): express.Express => {
@@ -22,6 +23,7 @@ export const createApp = (): express.Express => {
 	app.use(express.urlencoded({ extended: false }))
 
 	app.use(healthRouter)
+	app.use('/auth', authRouter)
 
 	app.use(notFoundHandler)
 	app.use(errorHandler)

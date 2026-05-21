@@ -1,18 +1,9 @@
 import jwt, { type SignOptions, type VerifyOptions } from 'jsonwebtoken'
 import { env } from '../config/env.js'
+import type { AccessPayload, RefreshPayload } from '../models/jwt.js'
 
 const ACCESS_AUDIENCE = 'matcha:access'
 const REFRESH_AUDIENCE = 'matcha:refresh'
-
-export type AccessPayload = {
-	sub: string
-	username: string
-}
-
-export type RefreshPayload = {
-	sub: string
-	jti: string
-}
 
 type DecodedAccess = AccessPayload & jwt.JwtPayload
 type DecodedRefresh = RefreshPayload & jwt.JwtPayload

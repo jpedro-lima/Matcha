@@ -30,13 +30,13 @@ async function consumeToken(table: TokenTable, token: string): Promise<string> {
 		.first<{ user_id: string; expires_at: Date | string } | undefined>()
 
 	if (!row) {
-		throw new AppError('INVALID_TOKEN', 400, 'Token inválido ou já consumido.')
+		throw new AppError('INVALID_TOKEN', 400, 'Invalid or already consumed token.')
 	}
 
 	const expiresAt = row.expires_at instanceof Date ? row.expires_at : new Date(row.expires_at)
 	if (expiresAt.getTime() <= Date.now()) {
 		await db(table).where({ token_hash: tokenHash }).del()
-		throw new AppError('EXPIRED_TOKEN', 400, 'Token expirado.')
+		throw new AppError('EXPIRED_TOKEN', 400, 'Token has expired.')
 	}
 
 	await db(table).where({ token_hash: tokenHash }).del()

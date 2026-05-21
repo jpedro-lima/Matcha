@@ -11,7 +11,7 @@ type ErrorBody = {
 }
 
 export const notFoundHandler: RequestHandler = (_req, _res, next) => {
-	next(new AppError('NOT_FOUND', 404, 'Recurso não encontrado.'))
+	next(new AppError('NOT_FOUND', 404, 'Resource not found.'))
 }
 
 export const errorHandler: ErrorRequestHandler = (err, req, res, _next) => {
@@ -31,7 +31,7 @@ export const errorHandler: ErrorRequestHandler = (err, req, res, _next) => {
 	const body: ErrorBody = {
 		error: {
 			code: 'INTERNAL_ERROR',
-			message: 'Erro interno do servidor.',
+			message: 'Internal server error.',
 			...(env.NODE_ENV !== 'production' && err instanceof Error
 				? { details: { name: err.name, message: err.message } }
 				: {}),

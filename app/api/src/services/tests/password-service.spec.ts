@@ -3,7 +3,7 @@ import { hashPassword, verifyPassword } from '../password-service.js'
 
 describe('passwordService', () => {
 	describe('hashPassword', () => {
-		it('retorna string diferente do input', async () => {
+		it('returns a string different from the input', async () => {
 			const plain = 'Forte#2026!'
 			const hash = await hashPassword(plain)
 
@@ -12,17 +12,17 @@ describe('passwordService', () => {
 			expect(hash.length).toBeGreaterThan(0)
 		})
 
-		it('usa bcrypt com cost ≥ 12 (prefixo $2b$12$ ou maior)', async () => {
+		it('uses bcrypt with cost >= 12 (prefix $2b$12$ or higher)', async () => {
 			const hash = await hashPassword('Forte#2026!')
-			// formato bcrypt: $<algo>$<cost>$<salt+hash>
-			// ex.: $2b$12$abcdefg...
+			// bcrypt format: $<algo>$<cost>$<salt+hash>
+			// e.g.: $2b$12$abcdefg...
 			const match = hash.match(/^\$2[aby]\$(\d{2})\$/)
 			expect(match).not.toBeNull()
 			const cost = Number(match?.[1])
 			expect(cost).toBeGreaterThanOrEqual(12)
 		})
 
-		it('produz hashes diferentes para o mesmo input (salts distintos)', async () => {
+		it('produces different hashes for the same input (distinct salts)', async () => {
 			const plain = 'Forte#2026!'
 			const [h1, h2] = await Promise.all([hashPassword(plain), hashPassword(plain)])
 			expect(h1).not.toBe(h2)
@@ -30,15 +30,15 @@ describe('passwordService', () => {
 	})
 
 	describe('verifyPassword', () => {
-		it('retorna true para a senha correta', async () => {
+		it('returns true for the correct password', async () => {
 			const plain = 'Forte#2026!'
 			const hash = await hashPassword(plain)
 			await expect(verifyPassword(plain, hash)).resolves.toBe(true)
 		})
 
-		it('retorna false para senha errada', async () => {
+		it('returns false for a wrong password', async () => {
 			const hash = await hashPassword('Forte#2026!')
-			await expect(verifyPassword('outra-senha', hash)).resolves.toBe(false)
+			await expect(verifyPassword('wrong-password', hash)).resolves.toBe(false)
 		})
 	})
 })
