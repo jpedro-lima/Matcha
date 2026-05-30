@@ -24,8 +24,14 @@ const envSchema = z.object({
 	SMTP_PASS: z.string().min(1),
 	SMTP_FROM: z.email(),
 
-	// UPLOAD_DIR: z.string().min(1),
-	// MAX_PHOTO_SIZE_MB: z.coerce.number().int().positive().default(5),
+	S3_ENDPOINT: z.url(),
+	S3_REGION: z.string().min(1).default('local'),
+	S3_BUCKET: z.string().min(1),
+	S3_ACCESS_KEY: z.string().min(1),
+	S3_SECRET_KEY: z.string().min(1),
+	S3_PUBLIC_URL: z.url(),
+
+	MAX_PHOTO_SIZE_MB: z.coerce.number().int().positive().default(5),
 })
 
 const parsed = envSchema.safeParse(process.env)
