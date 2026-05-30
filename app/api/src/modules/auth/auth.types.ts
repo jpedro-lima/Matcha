@@ -1,12 +1,8 @@
 import type { PublicUser } from '../../common/types/user.types.js'
 
-export type RegisterInput = {
-	email: string
-	username: string
-	firstName: string
-	lastName: string
-	password: string
-}
+// Outputs do auth.service. **Inputs** (corpos HTTP) vêm de `auth.schemas.ts`
+// via `z.infer<typeof xxxBodySchema>` — não dupliquei aqui. Para o tipo do
+// body do register, use `RegisterBody` exportado de `./auth.schemas.js`.
 
 export type LoginResult = {
 	accessToken: string

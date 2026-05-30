@@ -17,9 +17,8 @@ export const requireAuth: RequestHandler = (
 ) => {
 	const header = req.headers.authorization
 
-	if (!header) {
+	if (!header)
 		return next(new AppError('MISSING_TOKEN', 401, 'Authentication token is missing.'))
-	}
 
 	if (!header.toLowerCase().startsWith(BEARER_PREFIX)) {
 		return next(

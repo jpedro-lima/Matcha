@@ -140,12 +140,19 @@ describe('authService.register', () => {
 		expect(hashPassword).not.toHaveBeenCalled()
 	})
 
-	it('on success: hashes password, inserts user + token in a transaction, sends email, returns emailSent=true', async () => {
+	it('on success: hashes password, inserts user + profile + token in a transaction, sends email, returns emailSent=true', async () => {
 		const result = await register(validInput)
 
-		// users + token vão DENTRO da transação; email-service fica de FORA.
+		// users + profiles + token vão DENTRO da transação; email-service fica de FORA.
 		expect(dbMock.transaction).toHaveBeenCalledTimes(1)
 		expect(hashPassword).toHaveBeenCalledWith(validInput.password)
+
+		// `db('users')` e `db('profiles')` caíram no mesmo dbMock — verifica
+		// que ambas as tabelas foram tocadas.
+		expect(dbMock).toHaveBeenCalledWith('users')
+		expect(dbMock).toHaveBeenCalledWith('profiles')
+
+		// Insert do usuário.
 		expect(dbBuilder.insert).toHaveBeenCalledWith(
 			expect.objectContaining({
 				email: validInput.email,
@@ -155,6 +162,9 @@ describe('authService.register', () => {
 				password_hash: 'hashed-pw',
 			}),
 		)
+		// Insert do perfil — só o user_id, defaults cobrem o resto.
+		expect(dbBuilder.insert).toHaveBeenCalledWith({ user_id: 'user-123' })
+
 		// O segundo argumento é o executor de trx; aqui o próprio dbMock atua como trx.
 		expect(issueEmailToken).toHaveBeenCalledWith('user-123', dbMock)
 		expect(sendVerificationEmail).toHaveBeenCalledWith(validInput.email, 'email-token-abc')

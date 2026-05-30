@@ -23,14 +23,15 @@ import {
 import { db } from '../../config/db.js'
 import { logger } from '../../config/logger.js'
 import { AppError } from '../../utils/app-error.js'
-import type { LoginResult, RegisterInput, RegisterResult } from './auth.types.js'
+import type { RegisterBody } from './auth.schemas.js'
+import type { LoginResult, RegisterResult } from './auth.types.js'
 
 type AuthRow = Pick<
 	UserRow,
 	'id' | 'email' | 'username' | 'email_verified' | 'password_hash'
 >
 
-export async function register(input: RegisterInput): Promise<RegisterResult> {
+export async function register(input: RegisterBody): Promise<RegisterResult> {
 	const existingEmail = await db('users').where({ email: input.email }).first<AuthRow>()
 	if (existingEmail) {
 		throw new AppError('EMAIL_EXISTS', 409, 'Email is already registered.')
@@ -59,6 +60,12 @@ export async function register(input: RegisterInput): Promise<RegisterResult> {
 		if (!created) {
 			throw new AppError('INTERNAL_ERROR', 500, 'Failed to create user.')
 		}
+
+		// Linha 1:1 em `profiles` com defaults. Campos opcionais (bio, gender,
+		// birthDate, location…) são preenchidos depois via PATCH /users/me.
+		// `.returning('user_id')` é só pra manter o builder thenable consistente
+		// (mock do test depende disso).
+		await trx('profiles').insert({ user_id: created.id }).returning('user_id')
 
 		const emailToken = await issueEmailToken(created.id, trx)
 		return { user: created, token: emailToken }
