@@ -202,25 +202,90 @@ curl -sk -b cookies.txt -X POST https://localhost/api/auth/logout    # 204
 
 ---
 
-## Fase 5 — Perfil (`/users/me`, fotos, tags, localização)
+## Fase 5 — Perfil (`/users/me`, fotos via S3, tags, localização)
 
-> Objetivo: usuário consegue completar perfil, subir/excluir/promover fotos, gerenciar tags reutilizáveis e atualizar localização (com consentimento ou manual).
+> Objetivo: usuário consegue completar perfil, subir/excluir/promover fotos (upload direto pro storage, sem passar bytes pela API), gerenciar tags reutilizáveis e atualizar localização (com consentimento ou manual). Subdividida em seis entregas testáveis.
 
-> **TDD aplicado a cada service** desta fase (`profileService`, `photoService`, `tagService`, `locationService`): teste primeiro, implementação depois. Controllers são adapters HTTP — testar via `supertest` quando tiver lógica não trivial (ex.: validação de tipo de arquivo).
+> **TDD aplicado a cada service** desta fase: teste primeiro, implementação depois. Handlers são adapters HTTP — testar via `supertest` quando tiver lógica não trivial.
 
-**Instalar (delta da fase):** `multer` + `@types/multer`, `sharp`, `file-type` (detecção por magic bytes).
+### Fase 5.1 — Infra de object storage (MinIO + nginx + SDK)
 
-41. **Migration `profiles`** (`npm run migrate:make -- profiles`) — tabela `profiles` 1:1 com `users` (PK = FK CASCADE), todos os campos da seção 7 do DOC; CHECKs `gender`, `sexual_orientation`, `birth_date <= now - 18 years`; índices `(gender, sexual_orientation)`, `(latitude, longitude)`, `fame_rating DESC`.
-42. **Migration `photos_tags`** (`npm run migrate:make -- photos_tags`) — `photos`, `tags` (id serial, name UNIQUE lowercase), `user_tags` (PK composta). Trigger ou validação aplicativa para máximo 5 fotos e única `is_profile=true`.
-43. **Atualizar `POST /auth/register`** para também criar a linha em `profiles` (campos opcionais NULL) na mesma transação.
-44. **`GET /users/me`** e **`PATCH /users/me`** (nome, sobrenome, e-mail — se mudar, dispara novo fluxo de verificação —, gênero, orientação, bio, birthDate). Validação Zod.
-45. **`PATCH /users/me/location`** com `consent` boolean; se `false`, `city`+`neighborhood` obrigatórios.
-46. **Upload de fotos** — `multer` (storage em memória), validar mime + magic bytes via `file-type` (apenas `image/jpeg`, `image/png`, `image/webp`), `sharp` redimensiona para WebP máx 1024px lado maior, nome aleatório, salva em `/usr/src/app/uploads/<userId>/<uuid>.webp`. Reforçar limite ≤ 5 em transação.
-47. **`POST /users/me/photos`**, **`DELETE /users/me/photos/:id`** (apaga arquivo do disco também), **`PATCH /users/me/photos/:id/profile`** (mantém invariante "apenas uma `is_profile=true`" em transação).
-48. **`GET /users/me/tags`**, **`PUT /users/me/tags`** (substitui todas, cria as ausentes em lowercase sem `#`), **`GET /tags?query=`** autocomplete.
-49. **`profile_completed_at`** marcado quando todos os campos obrigatórios (gender, orientation, bio, birthDate, location, ≥ 1 foto, ≥ 1 tag) estiverem presentes — checar no `PATCH`/upload e atualizar.
+> Objetivo: storage dedicado rodando local via Docker, com presigned URLs prontas. **A API nunca recebe bytes de imagem** — cliente faz `PUT` direto no bucket, API só intermedeia metadados/permissão. Sem testes em `common/` (wrapper sobre SDK npm).
 
-**Checkpoint:** completar um perfil end-to-end via curl, verificar `profile_completed_at` populado, visualizar foto em `https://localhost/uploads/<userId>/<file>.webp` servida pelo nginx.
+**Instalar (delta da fase):** `@aws-sdk/client-s3`, `@aws-sdk/s3-request-presigner` (runtime). `multer` e `sharp` **não** entram — a API não processa imagens.
+
+41. **Serviço `minio` no `docker-compose.yml`** (`minio/minio:latest`), healthcheck `/minio/health/live`, volume nomeado `matcha_minio`, console em `:9001` (dev only), envs `MINIO_ROOT_USER`/`MINIO_ROOT_PASSWORD`. Init container `minio/mc` cria o bucket `matcha-photos` na primeira subida e aplica policy de leitura pública — controle de acesso fica nas rotas da API (perfis são públicos a usuários autenticados).
+42. **Env vars `S3_*`** validadas em `src/config/env.ts`: `S3_ENDPOINT` (internal: `http://minio:9000`), `S3_REGION` (`us-east-1` placeholder), `S3_BUCKET` (`matcha-photos`), `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `S3_PUBLIC_URL` (`https://localhost/uploads` — URL público via nginx).
+43. **`src/common/services/s3.service.ts`** — wrapper sobre o AWS SDK: `presignPut(key, contentType, contentLength)` retorna `{ uploadUrl, expiresAt }` (TTL 5 min), `head(key)` valida que objeto chegou + retorna size/contentType, `getRange(key, bytes)` baixa primeiros N bytes (para magic-byte check), `delete(key)`, `publicUrl(key)` → `${S3_PUBLIC_URL}/${key}`.
+44. **`nginx.conf`** ganha `location /uploads/` proxying para `http://minio:9000/matcha-photos/` com `proxy_cache_path`, `proxy_cache_valid 200 7d`, `add_header Cache-Control "public, max-age=604800"`. Fotos são imutáveis por key — cache agressivo é seguro.
+
+**Checkpoint:**
+
+```bash
+make up                                              # api, minio, nginx
+docker compose exec api curl -fI http://minio:9000/minio/health/live  # 200
+curl -sk https://localhost/uploads/idontexist.txt -o /dev/null -w '%{http_code}\n'   # 404 do MinIO via nginx — roteamento OK
+# Gerar presigned PUT por REPL temporário e fazer PUT manual no URL retornado;
+# depois confirmar que `curl -sk https://localhost/uploads/<key>` devolve o conteúdo.
+```
+
+### Fase 5.2 — Perfil base (schema + leitura/edição)
+
+45. **Migration `profiles`** (`npm run migrate:make -- profiles`) — tabela `profiles` 1:1 com `users` (PK = FK CASCADE), todos os campos da seção 7 do DOC; CHECKs `gender ∈ {m,f,nb,other}`, `sexual_orientation ∈ {hetero,homo,bi,other}`, `birth_date <= now - 18 years`; índices `(gender, sexual_orientation)`, `(latitude, longitude)`, `fame_rating DESC`. **Atualizar `auth.service.register`** para inserir linha em `profiles` (campos opcionais NULL) na mesma transação.
+46. **`GET /users/me`** retorna `{ user: {id, email, username, firstName, lastName, emailVerified}, profile: {...} }`. **`PATCH /users/me`** edita campos não-foto/não-tag/não-location: `firstName`, `lastName`, `bio`, `gender`, `sexualOrientation`, `birthDate`. Mudança de `email` dispara fluxo de re-verificação (gera `email_token` novo, marca `email_verified=false`). Validação via `modules/user/user.schemas.ts`.
+
+**Checkpoint:** `GET /users/me` retorna `{ user, profile }`; `PATCH /users/me` altera bio/gênero; `PATCH /users/me` com `email` novo gera nova linha em `email_tokens` e baixa `email_verified` no banco.
+
+### Fase 5.3 — Localização
+
+47. **`PATCH /users/me/location`** aceita dois shapes válidos no schema Zod: `{ consent: true, latitude, longitude }` (GPS do browser) ou `{ consent: false, city, neighborhood }` (fallback manual). Backend valida coords (`-90 ≤ lat ≤ 90`, `-180 ≤ lon ≤ 180`) e persiste em `profiles`. **Sem fallback IP automático no backend** — esse é trabalho do frontend (e o usuário precisa consentir explicitamente, conforme `specifications.md`).
+
+**Checkpoint:** PATCH com `consent=true` + coords grava no banco; PATCH com `consent=false` sem `city` retorna `400 VALIDATION_ERROR`.
+
+### Fase 5.4 — Fotos via presigned URL (3 passos do cliente)
+
+> **Fluxo:** (1) cliente pede slot → API gera presigned PUT + cria linha `status='pending'`; (2) cliente faz `PUT` direto no MinIO com os bytes; (3) cliente confirma → API valida via HEAD + magic bytes e marca `status='ready'`. **A API nunca recebe os bytes da imagem.** Resize é responsabilidade do cliente (canvas no frontend, idealmente WebP ≤ 1024px no lado maior).
+
+**Instalar (delta):** `file-type` (runtime — validação de magic bytes via stream parcial).
+
+48. **Migration `photos`** (`npm run migrate:make -- photos`) — `id uuid PK default gen_random_uuid()`, `user_id uuid FK CASCADE`, `key text NOT NULL UNIQUE`, `mime varchar(32)`, `bytes int`, `is_profile bool default false`, `status varchar(16) NOT NULL default 'pending'` (`pending`/`ready`/`failed`), `created_at timestamptz default now()`. Índice em `user_id`. Constraint parcial única em `(user_id) WHERE is_profile = true`.
+49. **`POST /users/me/photos/presign`** — body `{ contentType, size }`. Service valida: `contentType ∈ {image/jpeg, image/png, image/webp}`, `size ≤ 5MB`, user tem `< 5` fotos com `status ∈ ('ready', 'pending')`. Gera `photoId`, `key = <userId>/<photoId>`, chama `s3.presignPut`, insere linha `status='pending'`, retorna `{ photoId, uploadUrl, expiresAt }`.
+50. **`POST /users/me/photos/:id/confirm`** — service faz `s3.head(key)`; se 404 → marca `failed`, retorna `404 PHOTO_NOT_FOUND`. Valida `content-length`/`content-type` retornados pelo MinIO contra o que foi declarado no presign. Baixa primeiros 32 bytes via `s3.getRange`, passa pelo `file-type` — se MIME real ≠ declarado → `s3.delete` + marca `failed` + retorna `400 INVALID_FILE_TYPE`. Sucesso → `status='ready'`, retorna `{ id, url, isProfile }`. **`DELETE /users/me/photos/:id`** apaga linha + chama `s3.delete`. **`PATCH /users/me/photos/:id/profile`** atualiza a invariante "única `is_profile=true` por user" em transação.
+
+> **Limpeza de fotos órfãs** (linhas `status='pending'` que nunca foram confirmadas) **fica adiada para a Fase 10** — não é caminho crítico para a feature funcionar.
+
+**Checkpoint:**
+
+```bash
+# 1. Presign
+PRESIGN=$(curl -sk -X POST https://localhost/api/users/me/photos/presign \
+  -H 'Authorization: Bearer <t>' -H content-type:application/json \
+  -d '{"contentType":"image/webp","size":120000}')
+URL=$(echo "$PRESIGN" | jq -r .uploadUrl)
+ID=$(echo "$PRESIGN"  | jq -r .photoId)
+
+# 2. Upload direto no MinIO (API nunca recebe os bytes)
+curl -X PUT "$URL" --data-binary @teste.webp -H content-type:image/webp
+
+# 3. Confirm — API valida via HEAD + magic bytes
+curl -sk -X POST https://localhost/api/users/me/photos/$ID/confirm \
+  -H 'Authorization: Bearer <t>'
+# {id, url: "https://localhost/uploads/<userId>/<photoId>", isProfile: false}
+
+# 4. Browser: abrir o url devolvido — imagem é servida pelo nginx (cache 7d)
+```
+
+### Fase 5.5 — Tags
+
+51. **Migration `tags_user_tags`** (`npm run migrate:make -- tags_user_tags`) — `tags(id serial PK, name varchar UNIQUE lowercase)` + `user_tags(user_id FK CASCADE, tag_id FK CASCADE, PK composta)`. **`GET /users/me/tags`** lista tags do user. **`PUT /users/me/tags`** substitui todo o conjunto em transação: cria tags ausentes (lowercase, sem `#`), insere `user_tags`, remove vínculos que sobraram. **`GET /tags?query=`** autocomplete (top 20 por prefixo, ordenado por uso).
+
+**Checkpoint:** `PUT /users/me/tags` com `["vegan", "Music", "music"]` cria 2 tags únicas (`vegan`, `music`) e vincula ambas ao user. `GET /tags?query=mu` retorna `music`.
+
+### Fase 5.6 — Completude
+
+52. **`profile_completed_at` hook** — função compartilhada `recalculateCompleteness(userId, trx)` chamada ao fim de `PATCH /users/me`, `PATCH /users/me/location`, `POST /photos/:id/confirm`, `PUT /users/me/tags`. Marca `profile_completed_at = now()` quando todos os campos obrigatórios (gender, orientation, bio, birthDate, location, ≥ 1 foto `status='ready'`, ≥ 1 tag) estão presentes E o timestamp ainda é NULL.
+
+**Checkpoint final da Fase 5:** completar um perfil end-to-end via curl (sequência: `PATCH /users/me` com bio/gender/orientation/birthDate → `PATCH /location` → 3-step photo flow até `ready` + `isProfile=true` → `PUT /users/me/tags`), e validar `select profile_completed_at from profiles` retorna timestamp populado.
 
 ---
 
@@ -230,14 +295,14 @@ curl -sk -b cookies.txt -X POST https://localhost/api/auth/logout    # 204
 
 > **TDD aplicado:** `matchService` (engine de browsing/search) é o caso mais óbvio — escreva primeiro testes que descrevem cenários (ordenação por distância, filtros de tags, exclusão de bloqueados, bissexual default), depois a query única.
 
-50. **Service de matching** — query Knex única consolidando:
+53. **Service de matching** — query Knex única consolidando:
     - filtro de orientação compatível (`COALESCE(profiles.sexual_orientation, 'bi')`),
     - exclusão de bloqueados (ambos sentidos), já curtidos, próprio usuário, perfis sem foto, contas não verificadas,
     - bounding box por lat/lng + distância em km (Haversine em SQL),
     - score ponderado (proximidade ↑, tags em comum ↑, fame ↑).
-51. **`GET /browse`** com query params (`minAge`, `maxAge`, `minFame`, `maxFame`, `maxDistanceKm`, `tags`, `sortBy`, `order`, `page`, `limit`).
-52. **`GET /search`** — mesma engine, exigindo ao menos um critério no body/query.
-53. **Testes de regressão** para ordenação estável e prioridade de mesma área geográfica.
+54. **`GET /browse`** com query params (`minAge`, `maxAge`, `minFame`, `maxFame`, `maxDistanceKm`, `tags`, `sortBy`, `order`, `page`, `limit`).
+55. **`GET /search`** — mesma engine, exigindo ao menos um critério no body/query.
+56. **Testes de regressão** para ordenação estável e prioridade de mesma área geográfica.
 
 **Checkpoint:** com os 5 usuários do seed + 5 perfis adicionais criados manualmente, validar que `/browse` para o usuário A retorna B–E ordenados por distância, e que filtrar `tags=vegan` reduz a lista corretamente.
 
@@ -249,11 +314,11 @@ curl -sk -b cookies.txt -X POST https://localhost/api/auth/logout    # 204
 
 > **TDD aplicado:** `likeService` (regra de match mútuo), `blockService`, `reportService`, `visitService` — testes primeiro.
 
-54. **Migration `interactions`** (`npm run migrate:make -- interactions`) — `likes`, `visits`, `blocks`, `reports` e **VIEW `matches`** (seção 7 do DOC).
-55. **`GET /users/:id`** — perfil público (sem `email`/`password_hash`); inclui `relationship: { iLiked, likedMe, matched, blocked }`; registra entrada em `visits` (exceto self) e enfileira notificação `visit` (a notificação real entra na Fase 9; por enquanto stub que apenas loga).
-56. **`POST /users/:id/like`** — exige foto de perfil; detecta match mútuo (cria entrada/atualiza VIEW e enfileira notificação `match`) ou `like` simples.
-57. **`DELETE /users/:id/like`** — remove like; se desfaz match, marca match removido e prepara hook para encerrar chat (Fase 8).
-58. **`POST /users/:id/report`** (motivo `fake_account` apenas, conforme especificação mínima), **`POST /users/:id/block` / `DELETE /users/:id/block`**.
+57. **Migration `interactions`** (`npm run migrate:make -- interactions`) — `likes`, `visits`, `blocks`, `reports` e **VIEW `matches`** (seção 7 do DOC).
+58. **`GET /users/:id`** — perfil público (sem `email`/`password_hash`); inclui `relationship: { iLiked, likedMe, matched, blocked }`; registra entrada em `visits` (exceto self) e enfileira notificação `visit` (a notificação real entra na Fase 9; por enquanto stub que apenas loga).
+59. **`POST /users/:id/like`** — exige foto de perfil; detecta match mútuo (cria entrada/atualiza VIEW e enfileira notificação `match`) ou `like` simples.
+60. **`DELETE /users/:id/like`** — remove like; se desfaz match, marca match removido e prepara hook para encerrar chat (Fase 8).
+61. **`POST /users/:id/report`** (motivo `fake_account` apenas, conforme especificação mínima), **`POST /users/:id/block` / `DELETE /users/:id/block`**.
 
 **Checkpoint:** com usuário A logado, `GET /users/<B>` → 200 com `relationship.iLiked=false`. Após `POST /users/<B>/like` por A e mesmo por B, `GET /users/<B>` por A devolve `matched=true`.
 
@@ -267,15 +332,15 @@ curl -sk -b cookies.txt -X POST https://localhost/api/auth/logout    # 204
 
 **Instalar (delta da fase):** `socket.io` (runtime); `socket.io-client` (dev).
 
-59. **Migration `messages`** (`npm run migrate:make -- messages`) — tabela `messages` (seção 7 do DOC) com `(sender_id, recipient_id)` indexado em ambos os sentidos e `read_at`.
-60. **Setup do Socket.IO** anexado ao mesmo `httpServer` em `server.ts`; middleware de auth no handshake (token via query `?token=` ou header `Authorization`); rejeita conexão sem JWT válido.
-61. **Mapa de presença em memória** (`userId → Set<Socket>`) + heartbeat `presence:ping` atualizando `last_seen_at` e `is_online` em `profiles`. Documentar limitação de scaling (não funciona com múltiplas réplicas — registrar no DOC como dívida).
-62. **`GET /chats`** lista conversas (matches ativos) com `lastMessage` e `unreadCount`.
-63. **`GET /chats/:matchId/messages?before=&limit=`** paginado por cursor; valida participação no match.
-64. **`POST /chats/:matchId/messages`** (REST fallback) e evento WS `message:send` — ambos passam pelo mesmo service que persiste e emite `message:new` ao destinatário.
-65. **`PATCH /chats/:matchId/read`** + evento `message:read` para echo no remetente.
-66. **Typing indicators** (`typing:start/stop` → `typing`).
-67. **Política de bloqueio**: service de mensagens recusa envio se houver `blocks` entre os pares ou match inativo.
+62. **Migration `messages`** (`npm run migrate:make -- messages`) — tabela `messages` (seção 7 do DOC) com `(sender_id, recipient_id)` indexado em ambos os sentidos e `read_at`.
+63. **Setup do Socket.IO** anexado ao mesmo `httpServer` em `server.ts`; middleware de auth no handshake (token via query `?token=` ou header `Authorization`); rejeita conexão sem JWT válido.
+64. **Mapa de presença em memória** (`userId → Set<Socket>`) + heartbeat `presence:ping` atualizando `last_seen_at` e `is_online` em `profiles`. Documentar limitação de scaling (não funciona com múltiplas réplicas — registrar no DOC como dívida).
+65. **`GET /chats`** lista conversas (matches ativos) com `lastMessage` e `unreadCount`.
+66. **`GET /chats/:matchId/messages?before=&limit=`** paginado por cursor; valida participação no match.
+67. **`POST /chats/:matchId/messages`** (REST fallback) e evento WS `message:send` — ambos passam pelo mesmo service que persiste e emite `message:new` ao destinatário.
+68. **`PATCH /chats/:matchId/read`** + evento `message:read` para echo no remetente.
+69. **Typing indicators** (`typing:start/stop` → `typing`).
+70. **Política de bloqueio**: service de mensagens recusa envio se houver `blocks` entre os pares ou match inativo.
 
 **Checkpoint:** dois clientes (curl WS ou script Node) conectados como A e B em match ativo trocam mensagem em <1 s; após `POST /users/<B>/block` por A, novo `message:send` é rejeitado com `error` e a mensagem não aparece em `GET /chats/.../messages`.
 
@@ -287,11 +352,11 @@ curl -sk -b cookies.txt -X POST https://localhost/api/auth/logout    # 204
 
 > **TDD aplicado:** `notificationService.createNotification` testado isoladamente (dedupe de 10 min, payload por tipo, mock do canal WS). Os hooks dos services das fases 7 e 8 que hoje são stubs viram chamadas reais — atualizar testes existentes.
 
-68. **Migration `notifications`** (`npm run migrate:make -- notifications`) — tabela `notifications` da seção 7 do DOC.
-69. **`services/notificationService.ts`** — `createNotification(userId, actorId, type, payload)` chamado por likes, matches, unlike, visits, messages; emite `notification:new` no Socket.IO se o destinatário tiver socket conectado. Substituir os stubs deixados nas Fases 7 e 8.
-70. **`GET /notifications`** com `unreadOnly`, paginação e `unreadCount` agregado.
-71. **`PATCH /notifications/:id/read`** e **`PATCH /notifications/read-all`**.
-72. **Janela de dedupe** (ex.: não duplicar `visit` do mesmo `actor` em 10 minutos) — política explícita e documentada em comentário do service.
+71. **Migration `notifications`** (`npm run migrate:make -- notifications`) — tabela `notifications` da seção 7 do DOC.
+72. **`services/notificationService.ts`** — `createNotification(userId, actorId, type, payload)` chamado por likes, matches, unlike, visits, messages; emite `notification:new` no Socket.IO se o destinatário tiver socket conectado. Substituir os stubs deixados nas Fases 7 e 8.
+73. **`GET /notifications`** com `unreadOnly`, paginação e `unreadCount` agregado.
+74. **`PATCH /notifications/:id/read`** e **`PATCH /notifications/read-all`**.
+75. **Janela de dedupe** (ex.: não duplicar `visit` do mesmo `actor` em 10 minutos) — política explícita e documentada em comentário do service.
 
 **Checkpoint:** disparar like de A → B; conectar B via WS; receber `notification:new` em menos de 10 s. `GET /notifications?unreadOnly=true` devolve a notificação; `PATCH /notifications/:id/read` zera o contador.
 
@@ -301,14 +366,15 @@ curl -sk -b cookies.txt -X POST https://localhost/api/auth/logout    # 204
 
 > Objetivo: endurecer aplicação para padrões mínimos de produção.
 
-73. **Helmet com CSP** ajustada ao frontend; **HSTS** habilitado atrás do nginx em produção (não em dev com cert self-signed).
-74. **Sanitização**: nunca confiar em IDs do cliente — sempre validar contra `req.user.id` em serviços de mutação.
-75. **Rate limit global** (mais permissivo) + limites estritos em upload de fotos e endpoints de auth (já em Fase 4).
-76. **`DELETE /users/me`** — apaga em cascata (likes, visits, messages, photos no disco, tokens, profile) em transação; exige confirmação por senha no body.
-77. **Auditoria de tokens** — hash em DB para `email_tokens`/`password_reset_tokens` (já feito em Fase 4), uso único, TTL 24h verificação / 1h reset.
-78. **Logs sem PII** — nunca logar senha, refresh token cru, ou conteúdo de mensagem. Definir redactors no pino.
+76. **Helmet com CSP** ajustada ao frontend; **HSTS** habilitado atrás do nginx em produção (não em dev com cert self-signed).
+77. **Sanitização**: nunca confiar em IDs do cliente — sempre validar contra `req.user.id` em serviços de mutação.
+78. **Rate limit global** (mais permissivo) + limites estritos em upload de fotos e endpoints de auth (já em Fase 4).
+79. **`DELETE /users/me`** — apaga em cascata (likes, visits, messages, photos do bucket, tokens, profile) em transação; exige confirmação por senha no body. Para cada foto, chama `s3.delete(key)` antes do `DELETE FROM photos`.
+80. **Auditoria de tokens** — hash em DB para `email_tokens`/`password_reset_tokens` (já feito em Fase 4), uso único, TTL 24h verificação / 1h reset.
+81. **Logs sem PII** — nunca logar senha, refresh token cru, ou conteúdo de mensagem. Definir redactors no pino.
+82. **Limpeza de fotos órfãs** (adiado da Fase 5.4) — CLI `npm run cleanup:photos` (cron em produção): seleciona linhas em `photos` com `status='pending'` e `created_at < now() - interval '1 hour'`. Faz `s3.head` em cada — se objeto existe, promove para `ready` (cliente fez `PUT` mas nunca chamou `/confirm`); se não, `DELETE FROM photos`. Mesma rotina para `status='failed'` mais velhos que 24h (registro residual). Evita drift entre bucket e tabela.
 
-**Checkpoint:** `DELETE /users/me` remove tudo associado ao usuário; `psql` confirma ausência de registros órfãos. Logs da aplicação inspecionados não contêm secrets nem corpos de mensagem.
+**Checkpoint:** `DELETE /users/me` remove tudo associado ao usuário; `psql` confirma ausência de registros órfãos e `mc ls minio/matcha-photos/<userId>/` retorna vazio. `npm run cleanup:photos` em um banco com linhas `pending` antigas converte/limpa corretamente. Logs da aplicação inspecionados não contêm secrets nem corpos de mensagem.
 
 ---
 
@@ -318,10 +384,10 @@ curl -sk -b cookies.txt -X POST https://localhost/api/auth/logout    # 204
 
 **Instalar (delta da fase):** avaliar `@vitest/coverage-v8` (relatório de cobertura) e, se for o caso, `testcontainers` para postgres em CI (alternativa: service container do GitHub Actions).
 
-79. **Coverage report** — habilitar `coverage` no `vitest.config.ts` com threshold mínimo (ex.: 80% statements/branches em `src/services/`). Falha do gate de cobertura quebra o CI.
-80. **CI** (GitHub Actions): `lint` → `typecheck` → `migrate` em postgres ephemeral → `npm test -- --run --coverage` em paralelo. Cache de `node_modules` por `package-lock.json` hash.
-81. **README atualizado** seguindo seção 13 do [DOC.md](DOC.md): `make up`, `make health`, fluxo de testes (`npm test`, `npm test -- --coverage`), troubleshooting.
-82. **Checklist final** validando cada linha da [tabela de conformidade do DOC](DOC.md#-checklist-de-conformidade-com-os-requisitos) e do [checklist do specifications](specifications.md#checklist-rápido-de-implementação).
+83. **Coverage report** — habilitar `coverage` no `vitest.config.ts` com threshold mínimo (ex.: 80% statements/branches em `src/services/`). Falha do gate de cobertura quebra o CI.
+84. **CI** (GitHub Actions): `lint` → `typecheck` → `migrate` em postgres ephemeral → `npm test -- --run --coverage` em paralelo. Cache de `node_modules` por `package-lock.json` hash.
+85. **README atualizado** seguindo seção 13 do [DOC.md](DOC.md): `make up`, `make health`, fluxo de testes (`npm test`, `npm test -- --coverage`), troubleshooting.
+86. **Checklist final** validando cada linha da [tabela de conformidade do DOC](DOC.md#-checklist-de-conformidade-com-os-requisitos) e do [checklist do specifications](specifications.md#checklist-rápido-de-implementação).
 
 ---
 
