@@ -1,6 +1,6 @@
 import nodemailer, { type Transporter } from 'nodemailer'
-import { env } from '../config/env.js'
-import { logger } from '../config/logger.js'
+import { env } from '../../config/env.js'
+import { logger } from '../../config/logger.js'
 
 // Wrapper de Nodemailer. Sem testes unitários — os orquestradores que usam
 // (`auth-service.register`, `auth-service.forgotPassword`) mockam essa função
@@ -28,12 +28,24 @@ type SendArgs = {
 }
 
 async function send({ to, subject, text, html }: SendArgs): Promise<void> {
+	if (env.SMTP_DISABLED) {
+		// `text` já carrega o URL com o token raw — dá pra copiar do log.
+		logger.warn({ to, subject, text }, 'SMTP_DISABLED: email NOT sent (dev)')
+		return
+	}
 	const transporter = getTransporter()
-	const info = await transporter.sendMail({ from: env.SMTP_FROM, to, subject, text, html })
+	const info = await transporter.sendMail({
+		from: 'jpedrones@hotmail.com',
+		to,
+		subject,
+		text,
+		html,
+	})
 	logger.info({ messageId: info.messageId, to, subject }, 'email sent')
 }
 
-const verifyUrl = (token: string): string => `${env.APP_URL}/api/auth/verify-email/${token}`
+const verifyUrl = (token: string): string =>
+	`${env.APP_URL}/api/auth/verify-email/${token}`
 const resetUrl = (token: string): string => `${env.APP_URL}/reset-password?token=${token}`
 
 export function sendVerificationEmail(to: string, token: string): Promise<void> {

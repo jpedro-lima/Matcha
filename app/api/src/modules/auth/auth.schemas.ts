@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { passwordSchema } from './password-schema.js'
+import { passwordSchema } from '../../common/schemas/password.schema.js'
 
 export const registerBodySchema = z.object({
 	email: z.email(),
@@ -31,7 +31,12 @@ export const resetPasswordBodySchema = z.object({
 	newPassword: passwordSchema,
 })
 
+export const resendVerificationBodySchema = z.object({
+	email: z.email(),
+})
+
 export type RegisterBody = z.infer<typeof registerBodySchema>
 export type LoginBody = z.infer<typeof loginBodySchema>
 export type ForgotPasswordBody = z.infer<typeof forgotPasswordBodySchema>
 export type ResetPasswordBody = z.infer<typeof resetPasswordBodySchema>
+export type ResendVerificationBody = z.infer<typeof resendVerificationBodySchema>

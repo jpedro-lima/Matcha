@@ -1,44 +1,41 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { AppError } from '../../utils/app-error.js'
+import { hashPassword, verifyPassword } from '../../../common/services/bcrypt.service.js'
+import { sendPasswordResetEmail, sendVerificationEmail } from '../../../common/services/email.service.js'
+import { signAccess, signRefresh, verifyRefresh } from '../../../common/services/jwt.service.js'
+import {
+	consumeEmailToken,
+	consumePasswordResetToken,
+	issueEmailToken,
+	issuePasswordResetToken,
+} from '../../../common/services/token.service.js'
+import { AppError } from '../../../utils/app-error.js'
 import {
 	forgotPassword,
 	login,
 	logout,
 	refresh,
 	register,
+	resendVerificationEmail,
 	resetPassword,
 	verifyEmail,
-} from '../auth-service.js'
-import { sendPasswordResetEmail, sendVerificationEmail } from '../email-service.js'
-import { signAccess, signRefresh, verifyRefresh } from '../jwt-service.js'
-import { assertStrongPassword } from '../password-policy.js'
-import { hashPassword, verifyPassword } from '../password-service.js'
-import {
-	consumeEmailToken,
-	consumePasswordResetToken,
-	issueEmailToken,
-	issuePasswordResetToken,
-} from '../token-service.js'
+} from '../auth.service.js'
 
 // ── Collaborator mocks ────────────────────────────────────────────
-vi.mock('../password-policy.js', () => ({
-	assertStrongPassword: vi.fn(),
-}))
-vi.mock('../password-service.js', () => ({
+vi.mock('../../../common/services/bcrypt.service.js', () => ({
 	hashPassword: vi.fn(),
 	verifyPassword: vi.fn(),
 }))
-vi.mock('../token-service.js', () => ({
+vi.mock('../../../common/services/token.service.js', () => ({
 	issueEmailToken: vi.fn(),
 	consumeEmailToken: vi.fn(),
 	issuePasswordResetToken: vi.fn(),
 	consumePasswordResetToken: vi.fn(),
 }))
-vi.mock('../email-service.js', () => ({
+vi.mock('../../../common/services/email.service.js', () => ({
 	sendVerificationEmail: vi.fn(),
 	sendPasswordResetEmail: vi.fn(),
 }))
-vi.mock('../jwt-service.js', () => ({
+vi.mock('../../../common/services/jwt.service.js', () => ({
 	signAccess: vi.fn(),
 	signRefresh: vi.fn(),
 	verifyAccess: vi.fn(),
@@ -47,6 +44,8 @@ vi.mock('../jwt-service.js', () => ({
 
 // `db` is a function returning a builder; we mock the builder and each test
 // configures `where`/`first`/`insert`/`returning` in `beforeEach` or per case.
+// `db.transaction(cb)` é uma propriedade da função — passamos o próprio dbMock
+// como executor, de modo que `trx('users').insert(...)` cai no mesmo builder.
 const dbBuilder = vi.hoisted(() => ({
 	where: vi.fn(),
 	first: vi.fn(),
@@ -54,8 +53,14 @@ const dbBuilder = vi.hoisted(() => ({
 	returning: vi.fn(),
 	update: vi.fn(),
 }))
-const dbMock = vi.hoisted(() => vi.fn(() => dbBuilder))
-vi.mock('../../config/db.js', () => ({ db: dbMock }))
+const dbMock = vi.hoisted(() => {
+	const fn = vi.fn() as ReturnType<typeof vi.fn> & {
+		transaction: ReturnType<typeof vi.fn>
+	}
+	fn.transaction = vi.fn()
+	return fn
+})
+vi.mock('../../../config/db.js', () => ({ db: dbMock }))
 
 const validInput = {
 	email: 'new@matcha.local',
@@ -67,6 +72,12 @@ const validInput = {
 
 beforeEach(() => {
 	vi.clearAllMocks()
+	// Toda chamada `db(table)` (e `trx(table)` dentro da transação) cai no
+	// mesmo builder — assim os assertions valem para o caminho com transação.
+	dbMock.mockReturnValue(dbBuilder)
+	dbMock.transaction.mockImplementation(async (cb: (trx: typeof dbMock) => Promise<unknown>) =>
+		cb(dbMock),
+	)
 	// Builder chain: where(...).first()  and  insert(...).returning(...)
 	dbBuilder.where.mockReturnValue(dbBuilder)
 	dbBuilder.first.mockResolvedValue(undefined)
@@ -89,7 +100,6 @@ beforeEach(() => {
 	vi.mocked(consumePasswordResetToken).mockResolvedValue('user-123')
 	vi.mocked(sendVerificationEmail).mockResolvedValue(undefined)
 	vi.mocked(sendPasswordResetEmail).mockResolvedValue(undefined)
-	vi.mocked(assertStrongPassword).mockReturnValue(undefined)
 	vi.mocked(signAccess).mockReturnValue('access-jwt')
 	vi.mocked(signRefresh).mockReturnValue('refresh-jwt')
 	vi.mocked(verifyRefresh).mockReturnValue({
@@ -100,18 +110,6 @@ beforeEach(() => {
 })
 
 describe('authService.register', () => {
-	it('validates password strength before anything else', async () => {
-		vi.mocked(assertStrongPassword).mockImplementation(() => {
-			throw new AppError('WEAK_PASSWORD', 422, 'weak')
-		})
-
-		await expect(register(validInput)).rejects.toMatchObject({ code: 'WEAK_PASSWORD' })
-
-		expect(assertStrongPassword).toHaveBeenCalledWith(validInput.password)
-		expect(hashPassword).not.toHaveBeenCalled()
-		expect(dbBuilder.insert).not.toHaveBeenCalled()
-	})
-
 	it('rejects with EMAIL_EXISTS when the email is already registered', async () => {
 		// First query (by email) finds someone; `where` returns the builder, and
 		// `first` resolves with the existing row.
@@ -142,10 +140,11 @@ describe('authService.register', () => {
 		expect(hashPassword).not.toHaveBeenCalled()
 	})
 
-	it('on success: hashes password, inserts user, issues token and sends email', async () => {
+	it('on success: hashes password, inserts user + token in a transaction, sends email, returns emailSent=true', async () => {
 		const result = await register(validInput)
 
-		// Collaborator order: hash → insert → issue token → send email
+		// users + token vão DENTRO da transação; email-service fica de FORA.
+		expect(dbMock.transaction).toHaveBeenCalledTimes(1)
 		expect(hashPassword).toHaveBeenCalledWith(validInput.password)
 		expect(dbBuilder.insert).toHaveBeenCalledWith(
 			expect.objectContaining({
@@ -156,15 +155,34 @@ describe('authService.register', () => {
 				password_hash: 'hashed-pw',
 			}),
 		)
-		expect(issueEmailToken).toHaveBeenCalledWith('user-123')
+		// O segundo argumento é o executor de trx; aqui o próprio dbMock atua como trx.
+		expect(issueEmailToken).toHaveBeenCalledWith('user-123', dbMock)
 		expect(sendVerificationEmail).toHaveBeenCalledWith(validInput.email, 'email-token-abc')
 
 		expect(result).toEqual({
-			id: 'user-123',
-			email: validInput.email,
-			username: validInput.username,
-			emailVerified: false,
+			user: {
+				id: 'user-123',
+				email: validInput.email,
+				username: validInput.username,
+				emailVerified: false,
+			},
+			emailSent: true,
 		})
+	})
+
+	it('when SMTP fails: still returns the user with emailSent=false (transaction already committed)', async () => {
+		vi.mocked(sendVerificationEmail).mockRejectedValueOnce(
+			new Error('Invalid login: 535 5.7.0 Invalid credentials'),
+		)
+
+		const result = await register(validInput)
+
+		// A transação rodou — users + token estão persistidos.
+		expect(dbMock.transaction).toHaveBeenCalledTimes(1)
+		expect(issueEmailToken).toHaveBeenCalledWith('user-123', dbMock)
+		expect(sendVerificationEmail).toHaveBeenCalled()
+		expect(result.user.id).toBe('user-123')
+		expect(result.emailSent).toBe(false)
 	})
 
 	it('does NOT store password_hash with the raw password value', async () => {
@@ -172,6 +190,55 @@ describe('authService.register', () => {
 		const insertArg = dbBuilder.insert.mock.calls[0]?.[0] as { password_hash: string }
 		expect(insertArg.password_hash).not.toBe(validInput.password)
 		expect(insertArg.password_hash).toBe('hashed-pw')
+	})
+})
+
+describe('authService.resendVerificationEmail', () => {
+	it('issues a fresh token and sends the email when the user exists and is not verified', async () => {
+		dbBuilder.first.mockResolvedValueOnce({
+			id: 'user-123',
+			email: 'ana@matcha.local',
+			email_verified: false,
+		})
+
+		await resendVerificationEmail('ana@matcha.local')
+
+		expect(dbBuilder.where).toHaveBeenCalledWith({ email: 'ana@matcha.local' })
+		expect(issueEmailToken).toHaveBeenCalledWith('user-123')
+		expect(sendVerificationEmail).toHaveBeenCalledWith('ana@matcha.local', 'email-token-abc')
+	})
+
+	it('is silent (no token, no send) when the email is unknown — anti-enumeration', async () => {
+		dbBuilder.first.mockResolvedValueOnce(undefined)
+
+		await expect(resendVerificationEmail('ghost@x.com')).resolves.toBeUndefined()
+		expect(issueEmailToken).not.toHaveBeenCalled()
+		expect(sendVerificationEmail).not.toHaveBeenCalled()
+	})
+
+	it('is silent when the user is already verified', async () => {
+		dbBuilder.first.mockResolvedValueOnce({
+			id: 'user-123',
+			email: 'ana@matcha.local',
+			email_verified: true,
+		})
+
+		await expect(resendVerificationEmail('ana@matcha.local')).resolves.toBeUndefined()
+		expect(issueEmailToken).not.toHaveBeenCalled()
+		expect(sendVerificationEmail).not.toHaveBeenCalled()
+	})
+
+	it('swallows SMTP errors so the response shape remains constant', async () => {
+		dbBuilder.first.mockResolvedValueOnce({
+			id: 'user-123',
+			email: 'ana@matcha.local',
+			email_verified: false,
+		})
+		vi.mocked(sendVerificationEmail).mockRejectedValueOnce(new Error('smtp down'))
+
+		await expect(resendVerificationEmail('ana@matcha.local')).resolves.toBeUndefined()
+		expect(issueEmailToken).toHaveBeenCalledWith('user-123')
+		expect(sendVerificationEmail).toHaveBeenCalled()
 	})
 })
 
@@ -330,27 +397,15 @@ describe('authService.forgotPassword', () => {
 })
 
 describe('authService.resetPassword', () => {
-	it('validates strength → consumes token → updates password_hash', async () => {
+	it('consumes token → updates password_hash', async () => {
 		vi.mocked(consumePasswordResetToken).mockResolvedValueOnce('user-abc')
 
 		await resetPassword('reset-token', 'NewForte#2026!')
 
-		expect(assertStrongPassword).toHaveBeenCalledWith('NewForte#2026!')
 		expect(consumePasswordResetToken).toHaveBeenCalledWith('reset-token')
 		expect(hashPassword).toHaveBeenCalledWith('NewForte#2026!')
 		expect(dbBuilder.where).toHaveBeenCalledWith({ id: 'user-abc' })
 		expect(dbBuilder.update).toHaveBeenCalledWith({ password_hash: 'hashed-pw' })
-	})
-
-	it('rejects WEAK_PASSWORD before consuming the token', async () => {
-		vi.mocked(assertStrongPassword).mockImplementation(() => {
-			throw new AppError('WEAK_PASSWORD', 422, 'weak')
-		})
-
-		await expect(resetPassword('reset-token', '123')).rejects.toMatchObject({
-			code: 'WEAK_PASSWORD',
-		})
-		expect(consumePasswordResetToken).not.toHaveBeenCalled()
 	})
 
 	it('propagates INVALID_TOKEN if the reset token is invalid', async () => {

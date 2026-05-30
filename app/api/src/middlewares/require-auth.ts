@@ -1,9 +1,7 @@
 import type { NextFunction, Request, RequestHandler, Response } from 'express'
-import { verifyAccess } from '../services/jwt-service.js'
+import { verifyAccess } from '../common/services/jwt.service.js'
 import { AppError } from '../utils/app-error.js'
 
-// Augment do `Request` para o resto da app saber que `req.user` existe quando
-// passa por este middleware.
 declare module 'express-serve-static-core' {
 	interface Request {
 		user?: { id: string; username: string }
@@ -12,7 +10,11 @@ declare module 'express-serve-static-core' {
 
 const BEARER_PREFIX = 'bearer '
 
-export const requireAuth: RequestHandler = (req: Request, _res: Response, next: NextFunction) => {
+export const requireAuth: RequestHandler = (
+	req: Request,
+	_res: Response,
+	next: NextFunction,
+) => {
 	const header = req.headers.authorization
 
 	if (!header) {

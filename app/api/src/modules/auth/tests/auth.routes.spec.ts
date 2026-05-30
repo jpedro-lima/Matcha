@@ -1,11 +1,11 @@
 import request from 'supertest'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { AppError } from '../../utils/app-error.js'
+import { AppError } from '../../../utils/app-error.js'
 
-// Mocks the whole authService — integration test focuses on the HTTP path
+// Mocks the whole auth service — integration test focuses on the HTTP path
 // (validate, error handler, cookies, status codes). Business logic is already
-// covered by `auth-service.spec.ts`.
-vi.mock('../../services/auth-service.js', () => ({
+// covered by `auth.service.spec.ts`.
+vi.mock('../auth.service.js', () => ({
 	register: vi.fn(),
 	verifyEmail: vi.fn(),
 	login: vi.fn(),
@@ -13,11 +13,12 @@ vi.mock('../../services/auth-service.js', () => ({
 	logout: vi.fn(),
 	forgotPassword: vi.fn(),
 	resetPassword: vi.fn(),
+	resendVerificationEmail: vi.fn(),
 	getCurrentUser: vi.fn(),
 }))
 
 // requireAuth depends on jwt-service; we mock it to avoid real JWT signing
-vi.mock('../../services/jwt-service.js', () => ({
+vi.mock('../../../common/services/jwt.service.js', () => ({
 	signAccess: vi.fn(),
 	signRefresh: vi.fn(),
 	verifyAccess: vi.fn(),
@@ -37,11 +38,11 @@ const dbBuilder = vi.hoisted(() => ({
 	first: vi.fn(),
 }))
 const dbMock = vi.hoisted(() => vi.fn(() => dbBuilder))
-vi.mock('../../config/db.js', () => ({ db: dbMock, closeDb: vi.fn() }))
+vi.mock('../../../config/db.js', () => ({ db: dbMock, closeDb: vi.fn() }))
 
-const { app } = await import('../../app.js')
-const authService = await import('../../services/auth-service.js')
-const jwtService = await import('../../services/jwt-service.js')
+const { app } = await import('../../../app.js')
+const authService = await import('../auth.service.js')
+const jwtService = await import('../../../common/services/jwt.service.js')
 
 beforeEach(() => {
 	vi.clearAllMocks()
@@ -67,12 +68,15 @@ describe('POST /auth/register', () => {
 		expect(authService.register).not.toHaveBeenCalled()
 	})
 
-	it('201 + user in the body when service resolves', async () => {
+	it('201 + user in the body when the service resolves with emailSent=true', async () => {
 		vi.mocked(authService.register).mockResolvedValueOnce({
-			id: 'user-1',
-			email: validRegister.email,
-			username: validRegister.username,
-			emailVerified: false,
+			user: {
+				id: 'user-1',
+				email: validRegister.email,
+				username: validRegister.username,
+				emailVerified: false,
+			},
+			emailSent: true,
 		})
 
 		const res = await request(app).post('/auth/register').send(validRegister)
@@ -87,6 +91,24 @@ describe('POST /auth/register', () => {
 		expect(authService.register).toHaveBeenCalledWith(validRegister)
 	})
 
+	it('202 with hint to resend when SMTP failed but the user was created', async () => {
+		vi.mocked(authService.register).mockResolvedValueOnce({
+			user: {
+				id: 'user-1',
+				email: validRegister.email,
+				username: validRegister.username,
+				emailVerified: false,
+			},
+			emailSent: false,
+		})
+
+		const res = await request(app).post('/auth/register').send(validRegister)
+
+		expect(res.status).toBe(202)
+		expect(res.body.user.id).toBe('user-1')
+		expect(res.body.message).toMatch(/resend-verification/)
+	})
+
 	it('409 EMAIL_EXISTS when service throws AppError', async () => {
 		vi.mocked(authService.register).mockRejectedValueOnce(
 			new AppError('EMAIL_EXISTS', 409, 'already exists'),
@@ -96,6 +118,28 @@ describe('POST /auth/register', () => {
 
 		expect(res.status).toBe(409)
 		expect(res.body.error.code).toBe('EMAIL_EXISTS')
+	})
+})
+
+describe('POST /auth/resend-verification', () => {
+	it('400 VALIDATION_ERROR when the email field is missing', async () => {
+		const res = await request(app).post('/auth/resend-verification').send({})
+
+		expect(res.status).toBe(400)
+		expect(res.body.error.code).toBe('VALIDATION_ERROR')
+		expect(authService.resendVerificationEmail).not.toHaveBeenCalled()
+	})
+
+	it('200 with a neutral message when the service resolves', async () => {
+		vi.mocked(authService.resendVerificationEmail).mockResolvedValueOnce(undefined)
+
+		const res = await request(app)
+			.post('/auth/resend-verification')
+			.send({ email: 'anyone@x.com' })
+
+		expect(res.status).toBe(200)
+		expect(res.body.message).toMatch(/verification link/i)
+		expect(authService.resendVerificationEmail).toHaveBeenCalledWith('anyone@x.com')
 	})
 })
 

@@ -8,8 +8,3 @@ import { fileURLToPath } from 'node:url'
 const here = path.dirname(fileURLToPath(import.meta.url))
 const envPath = path.resolve(here, '../../../../.env')
 process.loadEnvFile(envPath)
-
-// Força ambiente de teste antes do `env.ts` ser avaliado por qualquer módulo
-// downstream. Isso direciona o knex para `matcha_db_test` (ver
-// `src/config/database.ts` perfil `test`).
-process.env.NODE_ENV = 'test'
