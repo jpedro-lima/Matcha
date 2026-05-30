@@ -25,7 +25,6 @@ const withFiles = (base: Knex.Config): Knex.Config => ({
 
 const config: Record<string, Knex.Config> = {
 	development: withFiles(databaseConfig.development),
-	test: withFiles(databaseConfig.test),
 	production: withFiles(databaseConfig.production),
 }
 

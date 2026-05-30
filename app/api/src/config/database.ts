@@ -15,16 +15,14 @@ const basePool: Knex.PoolConfig = {
 	idleTimeoutMillis: 30_000,
 }
 
-export const databaseConfig: Record<'development' | 'test' | 'production', Knex.Config> = {
+// Sem perfil `test` dedicado: a suíte é 100% mock ([[feedback-test-strategy]]),
+// `config/db.ts` nunca é instanciado em testes. Se NODE_ENV=test for setado,
+// caímos no perfil de development sem consequências.
+export const databaseConfig: Record<'development' | 'production', Knex.Config> = {
 	development: {
 		client: 'pg',
 		connection: baseConnection,
 		pool: basePool,
-	},
-	test: {
-		client: 'pg',
-		connection: { ...baseConnection, database: `${env.POSTGRES_DB}_test` },
-		pool: { ...basePool, max: 5 },
 	},
 	production: {
 		client: 'pg',
@@ -33,4 +31,5 @@ export const databaseConfig: Record<'development' | 'test' | 'production', Knex.
 	},
 }
 
-export const activeDatabaseConfig: Knex.Config = databaseConfig[env.NODE_ENV]
+export const activeDatabaseConfig: Knex.Config =
+	databaseConfig[env.NODE_ENV === 'production' ? 'production' : 'development']

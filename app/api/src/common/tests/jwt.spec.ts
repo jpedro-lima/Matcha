@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { signAccess, signRefresh, verifyAccess, verifyRefresh } from '../jwt.service.js'
+import {
+	signAccess,
+	signRefresh,
+	verifyAccess,
+	verifyRefresh,
+} from '../services/jwt.service.js'
 
 describe('JWT — access e refresh são tokens distintos', () => {
 	it('verifyAccess rejeita um refresh token', () => {
