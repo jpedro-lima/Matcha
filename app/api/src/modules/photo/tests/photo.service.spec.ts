@@ -85,7 +85,7 @@ const PHOTO_ROW = {
 }
 
 describe('photoService.presignPhoto', () => {
-	it('insere row pending e devolve uploadUrl quando user tem < 5 fotos ativas', async () => {
+	it('inserts a pending row and returns uploadUrl when user has fewer than 5 active photos', async () => {
 		dbBuilder.first.mockResolvedValueOnce({ count: '2' })
 
 		const res = await presignPhoto('user-1', { contentType: 'image/webp', size: 120000 })
@@ -109,7 +109,7 @@ describe('photoService.presignPhoto', () => {
 		})
 	})
 
-	it('rejeita com PHOTO_LIMIT_REACHED quando user já tem 5 ativas', async () => {
+	it('rejects with PHOTO_LIMIT_REACHED when user already has 5 active photos', async () => {
 		dbBuilder.first.mockResolvedValueOnce({ count: '5' })
 
 		await expect(
@@ -125,7 +125,7 @@ describe('photoService.presignPhoto', () => {
 })
 
 describe('photoService.confirmPhoto', () => {
-	it('rejeita PHOTO_NOT_FOUND quando o photoId não existe para o user', async () => {
+	it('rejects PHOTO_NOT_FOUND when the photoId does not belong to the user', async () => {
 		dbBuilder.first.mockResolvedValueOnce(undefined)
 
 		await expect(confirmPhoto('user-1', 'ghost')).rejects.toMatchObject({
@@ -135,7 +135,7 @@ describe('photoService.confirmPhoto', () => {
 		expect(head).not.toHaveBeenCalled()
 	})
 
-	it('idempotente: já ready devolve a foto com signed URL sem revalidar', async () => {
+	it('idempotent: already-ready photo returns signed URL without re-validating', async () => {
 		dbBuilder.first.mockResolvedValueOnce({ ...PHOTO_ROW, status: 'ready' })
 
 		const res = await confirmPhoto('user-1', 'photo-1')
@@ -147,7 +147,7 @@ describe('photoService.confirmPhoto', () => {
 		expect(res.url).toContain('sig=XYZ')
 	})
 
-	it('marca failed e rejeita quando head retorna null (objeto não chegou)', async () => {
+	it('marks as failed and rejects when head returns null (object never uploaded)', async () => {
 		dbBuilder.first.mockResolvedValueOnce(PHOTO_ROW)
 		vi.mocked(head).mockResolvedValueOnce(null)
 
@@ -159,7 +159,7 @@ describe('photoService.confirmPhoto', () => {
 		expect(deleteObject).not.toHaveBeenCalled()
 	})
 
-	it('marca failed + INVALID_FILE_TYPE quando metadata do objeto difere do declarado', async () => {
+	it('marks failed + INVALID_FILE_TYPE when object metadata differs from declared', async () => {
 		dbBuilder.first.mockResolvedValueOnce(PHOTO_ROW)
 		vi.mocked(head).mockResolvedValueOnce({
 			contentLength: 999999,
@@ -174,7 +174,7 @@ describe('photoService.confirmPhoto', () => {
 		expect(dbBuilder.update).toHaveBeenCalledWith({ status: 'failed' })
 	})
 
-	it('marca failed + INVALID_FILE_TYPE quando magic bytes não batem com MIME declarado', async () => {
+	it('marks failed + INVALID_FILE_TYPE when magic bytes do not match declared MIME', async () => {
 		dbBuilder.first.mockResolvedValueOnce(PHOTO_ROW)
 		vi.mocked(head).mockResolvedValueOnce({
 			contentLength: 120000,
@@ -193,7 +193,7 @@ describe('photoService.confirmPhoto', () => {
 		expect(deleteObject).toHaveBeenCalledWith('user-1/photo-1')
 	})
 
-	it('dispara recalculateCompleteness após marcar ready', async () => {
+	it('triggers recalculateCompleteness after marking ready', async () => {
 		dbBuilder.first.mockResolvedValueOnce(PHOTO_ROW)
 		vi.mocked(head).mockResolvedValueOnce({
 			contentLength: 120000,
@@ -210,7 +210,7 @@ describe('photoService.confirmPhoto', () => {
 		expect(recalculateCompleteness).toHaveBeenCalledWith('user-1')
 	})
 
-	it('marca ready e devolve foto com signed URL quando tudo bate', async () => {
+	it('marks ready and returns photo with signed URL when everything matches', async () => {
 		dbBuilder.first.mockResolvedValueOnce(PHOTO_ROW)
 		vi.mocked(head).mockResolvedValueOnce({
 			contentLength: 120000,
@@ -237,7 +237,7 @@ describe('photoService.confirmPhoto', () => {
 })
 
 describe('photoService.deletePhoto', () => {
-	it('rejeita PHOTO_NOT_FOUND quando id não pertence ao user', async () => {
+	it('rejects PHOTO_NOT_FOUND when id does not belong to the user', async () => {
 		dbBuilder.first.mockResolvedValueOnce(undefined)
 
 		await expect(deletePhoto('user-1', 'ghost')).rejects.toMatchObject({
@@ -247,7 +247,7 @@ describe('photoService.deletePhoto', () => {
 		expect(deleteObject).not.toHaveBeenCalled()
 	})
 
-	it('chama s3.delete e apaga a linha', async () => {
+	it('calls s3.delete and removes the row', async () => {
 		dbBuilder.first.mockResolvedValueOnce(PHOTO_ROW)
 
 		await deletePhoto('user-1', 'photo-1')
@@ -258,7 +258,7 @@ describe('photoService.deletePhoto', () => {
 })
 
 describe('photoService.listPhotos', () => {
-	it('retorna fotos do user com signed URL por item (excluindo failed)', async () => {
+	it('returns user photos with per-item signed URL (excluding failed)', async () => {
 		dbBuilder.select.mockResolvedValueOnce([
 			{ ...PHOTO_ROW, status: 'ready' },
 			{ ...PHOTO_ROW, id: 'photo-2', key: 'user-1/photo-2', status: 'pending' },

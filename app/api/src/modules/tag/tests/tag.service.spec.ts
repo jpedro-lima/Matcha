@@ -52,7 +52,7 @@ beforeEach(() => {
 })
 
 describe('tagService.getUserTags', () => {
-	it('lista tags do user ordenadas por nome', async () => {
+	it('lists user tags ordered by name', async () => {
 		dbBuilder.select.mockResolvedValueOnce([
 			{ id: 1, name: 'music' },
 			{ id: 2, name: 'vegan' },
@@ -70,7 +70,7 @@ describe('tagService.getUserTags', () => {
 		])
 	})
 
-	it('retorna array vazio quando o user não tem tags', async () => {
+	it('returns an empty array when the user has no tags', async () => {
 		dbBuilder.select.mockResolvedValueOnce([])
 		const tags = await getUserTags('user-1')
 		expect(tags).toEqual([])
@@ -78,7 +78,7 @@ describe('tagService.getUserTags', () => {
 })
 
 describe('tagService.replaceUserTags', () => {
-	it('cria tags faltantes (onConflict ignore) e vincula em transação', async () => {
+	it('creates missing tags (onConflict ignore) and links them in a transaction', async () => {
 		// Após o insert, query .whereIn devolve as rows criadas
 		dbBuilder.select.mockResolvedValueOnce([
 			{ id: 7, name: 'music' },
@@ -106,7 +106,7 @@ describe('tagService.replaceUserTags', () => {
 		])
 	})
 
-	it('dedupe nomes idênticos antes do insert', async () => {
+	it('dedupes identical names before insert', async () => {
 		dbBuilder.select.mockResolvedValueOnce([{ id: 7, name: 'music' }])
 
 		await replaceUserTags('user-1', ['music', 'music', 'music'])
@@ -115,7 +115,7 @@ describe('tagService.replaceUserTags', () => {
 		expect(dbBuilder.whereIn).toHaveBeenCalledWith('name', ['music'])
 	})
 
-	it('array vazio: apaga vínculos do user e não toca em tags', async () => {
+	it('empty array: clears user links without touching tags', async () => {
 		const result = await replaceUserTags('user-1', [])
 
 		expect(dbBuilder.delete).toHaveBeenCalled()
@@ -123,7 +123,7 @@ describe('tagService.replaceUserTags', () => {
 		expect(result).toEqual([])
 	})
 
-	it('dispara recalculateCompleteness DENTRO da transação (passa trx)', async () => {
+	it('triggers recalculateCompleteness INSIDE the transaction (passes trx)', async () => {
 		dbBuilder.select.mockResolvedValueOnce([{ id: 7, name: 'music' }])
 
 		await replaceUserTags('user-1', ['music'])
@@ -135,7 +135,7 @@ describe('tagService.replaceUserTags', () => {
 })
 
 describe('tagService.searchTags', () => {
-	it('busca por prefixo, ordena por uso desc + nome, limit 20', async () => {
+	it('searches by prefix, orders by usage desc + name, limit 20', async () => {
 		dbBuilder.select.mockResolvedValueOnce([
 			{ id: 1, name: 'music' },
 			{ id: 2, name: 'mucho' },

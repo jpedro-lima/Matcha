@@ -45,14 +45,14 @@ const authHeader = (): [string, string] => {
 }
 
 describe('GET /users/me/tags', () => {
-	it('401 MISSING_TOKEN sem Authorization', async () => {
+	it('401 MISSING_TOKEN when Authorization is absent', async () => {
 		const res = await request(app).get('/users/me/tags')
 
 		expect(res.status).toBe(401)
 		expect(tagService.getUserTags).not.toHaveBeenCalled()
 	})
 
-	it('200 com { tags } quando autenticado', async () => {
+	it('200 with { tags } when authenticated', async () => {
 		vi.mocked(tagService.getUserTags).mockResolvedValueOnce([{ id: 1, name: 'music' }])
 
 		const res = await request(app)
@@ -66,7 +66,7 @@ describe('GET /users/me/tags', () => {
 })
 
 describe('PUT /users/me/tags', () => {
-	it('401 MISSING_TOKEN sem Authorization', async () => {
+	it('401 MISSING_TOKEN when Authorization is absent', async () => {
 		const res = await request(app)
 			.put('/users/me/tags')
 			.send({ tags: ['music'] })
@@ -75,7 +75,7 @@ describe('PUT /users/me/tags', () => {
 		expect(tagService.replaceUserTags).not.toHaveBeenCalled()
 	})
 
-	it('400 VALIDATION_ERROR quando body não é { tags: [...] }', async () => {
+	it('400 VALIDATION_ERROR when body is not { tags: [...] }', async () => {
 		const res = await request(app)
 			.put('/users/me/tags')
 			.set(...authHeader())
@@ -85,7 +85,7 @@ describe('PUT /users/me/tags', () => {
 		expect(res.body.error.code).toBe('VALIDATION_ERROR')
 	})
 
-	it('400 VALIDATION_ERROR para tag com caractere inválido', async () => {
+	it('400 VALIDATION_ERROR for tag with invalid characters', async () => {
 		const res = await request(app)
 			.put('/users/me/tags')
 			.set(...authHeader())
@@ -95,7 +95,7 @@ describe('PUT /users/me/tags', () => {
 		expect(res.body.error.code).toBe('VALIDATION_ERROR')
 	})
 
-	it('normaliza nomes (lowercase, strip #) antes de chamar service', async () => {
+	it('normalizes names (lowercase, strip #) before calling the service', async () => {
 		vi.mocked(tagService.replaceUserTags).mockResolvedValueOnce([
 			{ id: 7, name: 'music' },
 			{ id: 8, name: 'vegan' },
@@ -115,7 +115,7 @@ describe('PUT /users/me/tags', () => {
 		])
 	})
 
-	it('200 com array vazio limpa as tags do user', async () => {
+	it('200 with empty array clears the user tags', async () => {
 		vi.mocked(tagService.replaceUserTags).mockResolvedValueOnce([])
 
 		const res = await request(app)
@@ -129,14 +129,14 @@ describe('PUT /users/me/tags', () => {
 })
 
 describe('GET /tags', () => {
-	it('401 MISSING_TOKEN sem Authorization', async () => {
+	it('401 MISSING_TOKEN when Authorization is absent', async () => {
 		const res = await request(app).get('/tags?query=mu')
 
 		expect(res.status).toBe(401)
 		expect(tagService.searchTags).not.toHaveBeenCalled()
 	})
 
-	it('400 VALIDATION_ERROR sem query', async () => {
+	it('400 VALIDATION_ERROR when query is missing', async () => {
 		const res = await request(app)
 			.get('/tags')
 			.set(...authHeader())
@@ -145,7 +145,7 @@ describe('GET /tags', () => {
 		expect(res.body.error.code).toBe('VALIDATION_ERROR')
 	})
 
-	it('400 VALIDATION_ERROR para query com wildcards LIKE (%, _)', async () => {
+	it('400 VALIDATION_ERROR for query with LIKE wildcards (%, _)', async () => {
 		const res = await request(app)
 			.get('/tags?query=%25')
 			.set(...authHeader())
@@ -153,7 +153,7 @@ describe('GET /tags', () => {
 		expect(res.status).toBe(400)
 	})
 
-	it('200 com matches do autocomplete (query normalizada)', async () => {
+	it('200 with autocomplete matches (normalized query)', async () => {
 		vi.mocked(tagService.searchTags).mockResolvedValueOnce([{ id: 1, name: 'music' }])
 
 		const res = await request(app)

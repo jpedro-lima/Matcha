@@ -55,7 +55,7 @@ const PHOTO = {
 }
 
 describe('GET /users/me/photos', () => {
-	it('401 MISSING_TOKEN sem Authorization', async () => {
+	it('401 MISSING_TOKEN when Authorization is absent', async () => {
 		const res = await request(app).get('/users/me/photos')
 
 		expect(res.status).toBe(401)
@@ -63,7 +63,7 @@ describe('GET /users/me/photos', () => {
 		expect(photoService.listPhotos).not.toHaveBeenCalled()
 	})
 
-	it('200 com { photos } quando autenticado', async () => {
+	it('200 with { photos } when authenticated', async () => {
 		vi.mocked(photoService.listPhotos).mockResolvedValueOnce([PHOTO])
 
 		const res = await request(app)
@@ -77,7 +77,7 @@ describe('GET /users/me/photos', () => {
 })
 
 describe('POST /users/me/photos/presign', () => {
-	it('401 MISSING_TOKEN sem Authorization', async () => {
+	it('401 MISSING_TOKEN when Authorization is absent', async () => {
 		const res = await request(app)
 			.post('/users/me/photos/presign')
 			.send({ contentType: 'image/webp', size: 120000 })
@@ -86,7 +86,7 @@ describe('POST /users/me/photos/presign', () => {
 		expect(photoService.presignPhoto).not.toHaveBeenCalled()
 	})
 
-	it('400 VALIDATION_ERROR para contentType não permitido', async () => {
+	it('400 VALIDATION_ERROR for disallowed contentType', async () => {
 		const res = await request(app)
 			.post('/users/me/photos/presign')
 			.set(...authHeader())
@@ -97,7 +97,7 @@ describe('POST /users/me/photos/presign', () => {
 		expect(photoService.presignPhoto).not.toHaveBeenCalled()
 	})
 
-	it('400 VALIDATION_ERROR para size acima do limite', async () => {
+	it('400 VALIDATION_ERROR for size above the limit', async () => {
 		const res = await request(app)
 			.post('/users/me/photos/presign')
 			.set(...authHeader())
@@ -107,7 +107,7 @@ describe('POST /users/me/photos/presign', () => {
 		expect(res.body.error.code).toBe('VALIDATION_ERROR')
 	})
 
-	it('400 PHOTO_LIMIT_REACHED quando service rejeita por limite', async () => {
+	it('400 PHOTO_LIMIT_REACHED when service rejects due to limit', async () => {
 		vi.mocked(photoService.presignPhoto).mockRejectedValueOnce(
 			new AppError('PHOTO_LIMIT_REACHED', 400, 'limit'),
 		)
@@ -121,7 +121,7 @@ describe('POST /users/me/photos/presign', () => {
 		expect(res.body.error.code).toBe('PHOTO_LIMIT_REACHED')
 	})
 
-	it('201 com photoId/uploadUrl/expiresAt no happy path', async () => {
+	it('201 with photoId/uploadUrl/expiresAt on the happy path', async () => {
 		vi.mocked(photoService.presignPhoto).mockResolvedValueOnce({
 			photoId: 'photo-1',
 			uploadUrl: 'https://minio.test/x?sig=y',
@@ -146,7 +146,7 @@ describe('POST /users/me/photos/presign', () => {
 })
 
 describe('POST /users/me/photos/:id/confirm', () => {
-	it('400 VALIDATION_ERROR para id não-uuid', async () => {
+	it('400 VALIDATION_ERROR for non-uuid id', async () => {
 		const res = await request(app)
 			.post('/users/me/photos/not-a-uuid/confirm')
 			.set(...authHeader())
@@ -156,7 +156,7 @@ describe('POST /users/me/photos/:id/confirm', () => {
 		expect(photoService.confirmPhoto).not.toHaveBeenCalled()
 	})
 
-	it('404 PHOTO_NOT_FOUND quando service rejeita', async () => {
+	it('404 PHOTO_NOT_FOUND when service rejects', async () => {
 		vi.mocked(photoService.confirmPhoto).mockRejectedValueOnce(
 			new AppError('PHOTO_NOT_FOUND', 404, 'nope'),
 		)
@@ -169,7 +169,7 @@ describe('POST /users/me/photos/:id/confirm', () => {
 		expect(res.body.error.code).toBe('PHOTO_NOT_FOUND')
 	})
 
-	it('200 com a foto quando service resolve', async () => {
+	it('200 with the photo when service resolves', async () => {
 		vi.mocked(photoService.confirmPhoto).mockResolvedValueOnce(PHOTO)
 
 		const res = await request(app)
@@ -186,7 +186,7 @@ describe('POST /users/me/photos/:id/confirm', () => {
 })
 
 describe('DELETE /users/me/photos/:id', () => {
-	it('400 VALIDATION_ERROR para id não-uuid', async () => {
+	it('400 VALIDATION_ERROR for non-uuid id', async () => {
 		const res = await request(app)
 			.delete('/users/me/photos/not-a-uuid')
 			.set(...authHeader())
@@ -195,7 +195,7 @@ describe('DELETE /users/me/photos/:id', () => {
 		expect(photoService.deletePhoto).not.toHaveBeenCalled()
 	})
 
-	it('204 No Content quando service resolve', async () => {
+	it('204 No Content when service resolves', async () => {
 		vi.mocked(photoService.deletePhoto).mockResolvedValueOnce(undefined)
 
 		const res = await request(app)

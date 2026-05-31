@@ -36,7 +36,7 @@ beforeEach(() => {
 })
 
 describe('recalculateCompleteness', () => {
-	it('marca profile_completed_at quando todos os sinais estão presentes', async () => {
+	it('marks profile_completed_at when every required signal is present', async () => {
 		dbBuilder.first
 			.mockResolvedValueOnce(COMPLETE_PROFILE) // profiles row
 			.mockResolvedValueOnce({ count: '1' }) // photos count
@@ -47,7 +47,7 @@ describe('recalculateCompleteness', () => {
 		expect(dbBuilder.update).toHaveBeenCalledWith({ profile_completed_at: 'NOW()' })
 	})
 
-	it('no-op quando já foi marcado antes (one-way)', async () => {
+	it('no-op when already marked previously (one-way)', async () => {
 		dbBuilder.first.mockResolvedValueOnce({
 			...COMPLETE_PROFILE,
 			profile_completed_at: new Date('2026-01-01'),
@@ -58,19 +58,19 @@ describe('recalculateCompleteness', () => {
 		expect(dbBuilder.update).not.toHaveBeenCalled()
 	})
 
-	it('no-op quando bio ausente', async () => {
+	it('no-op when bio is missing', async () => {
 		dbBuilder.first.mockResolvedValueOnce({ ...COMPLETE_PROFILE, bio: null })
 		await recalculateCompleteness('user-1')
 		expect(dbBuilder.update).not.toHaveBeenCalled()
 	})
 
-	it('no-op quando location_consent é null (nem GPS nem manual)', async () => {
+	it('no-op when location_consent is null (neither GPS nor manual)', async () => {
 		dbBuilder.first.mockResolvedValueOnce({ ...COMPLETE_PROFILE, location_consent: null })
 		await recalculateCompleteness('user-1')
 		expect(dbBuilder.update).not.toHaveBeenCalled()
 	})
 
-	it('no-op quando location_consent=false (manual) mas todo resto OK — manual conta como location', async () => {
+	it('marks when location_consent=false (manual fallback counts as a location)', async () => {
 		dbBuilder.first
 			.mockResolvedValueOnce({ ...COMPLETE_PROFILE, location_consent: false })
 			.mockResolvedValueOnce({ count: '1' })
@@ -81,7 +81,7 @@ describe('recalculateCompleteness', () => {
 		expect(dbBuilder.update).toHaveBeenCalledWith({ profile_completed_at: 'NOW()' })
 	})
 
-	it('no-op sem fotos ready', async () => {
+	it('no-op when there are no ready photos', async () => {
 		dbBuilder.first
 			.mockResolvedValueOnce(COMPLETE_PROFILE)
 			.mockResolvedValueOnce({ count: '0' })
@@ -91,7 +91,7 @@ describe('recalculateCompleteness', () => {
 		expect(dbBuilder.update).not.toHaveBeenCalled()
 	})
 
-	it('no-op sem tags', async () => {
+	it('no-op when the user has no tags', async () => {
 		dbBuilder.first
 			.mockResolvedValueOnce(COMPLETE_PROFILE)
 			.mockResolvedValueOnce({ count: '1' })
@@ -102,7 +102,7 @@ describe('recalculateCompleteness', () => {
 		expect(dbBuilder.update).not.toHaveBeenCalled()
 	})
 
-	it('no-op quando profile row não existe', async () => {
+	it('no-op when the profile row does not exist', async () => {
 		dbBuilder.first.mockResolvedValueOnce(undefined)
 
 		await recalculateCompleteness('user-1')
@@ -110,7 +110,7 @@ describe('recalculateCompleteness', () => {
 		expect(dbBuilder.update).not.toHaveBeenCalled()
 	})
 
-	it('aceita executor (Knex.Transaction) opcional', async () => {
+	it('accepts an optional executor (Knex.Transaction)', async () => {
 		const trxBuilder = {
 			where: vi.fn().mockReturnThis(),
 			first: vi.fn().mockResolvedValueOnce(COMPLETE_PROFILE),

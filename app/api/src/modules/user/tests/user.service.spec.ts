@@ -297,7 +297,7 @@ describe('userService.updateLocation', () => {
 		expect(dbMock.transaction).not.toHaveBeenCalled()
 	})
 
-	it('dispara recalculateCompleteness após o update', async () => {
+	it('triggers recalculateCompleteness after the update', async () => {
 		dbBuilder.update.mockResolvedValueOnce(1)
 		dbBuilder.first.mockResolvedValueOnce(userRow).mockResolvedValueOnce(profileRow)
 
