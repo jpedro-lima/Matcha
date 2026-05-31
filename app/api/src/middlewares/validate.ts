@@ -36,7 +36,14 @@ export const validate = (schemas: Schemas): RequestHandler => {
 			const parsed = schemas.query.safeParse(req.query)
 			if (!parsed.success)
 				details.push(...formatIssues('query', parsed.error.issues as ZodIssue[]))
-			else Object.assign(req.query as object, parsed.data as object)
+			else {
+				Object.defineProperty(req, 'query', {
+					value: parsed.data,
+					writable: true,
+					configurable: true,
+					enumerable: true,
+				})
+			}
 		}
 
 		if (schemas.params) {
