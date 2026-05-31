@@ -83,7 +83,9 @@ describe('GET /users/me', () => {
 		} as ReturnType<typeof jwtService.verifyAccess>)
 		vi.mocked(userService.getProfile).mockResolvedValueOnce(PROFILE_PAYLOAD)
 
-		const res = await request(app).get('/users/me').set('Authorization', 'Bearer fake-jwt')
+		const res = await request(app)
+			.get('/users/me')
+			.set('Authorization', 'Bearer fake-jwt')
 
 		expect(res.status).toBe(200)
 		expect(res.body).toEqual(PROFILE_PAYLOAD)

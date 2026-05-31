@@ -27,25 +27,33 @@ export const validate = (schemas: Schemas): RequestHandler => {
 
 		if (schemas.body) {
 			const parsed = schemas.body.safeParse(req.body)
-			if (!parsed.success) details.push(...formatIssues('body', parsed.error.issues as ZodIssue[]))
+			if (!parsed.success)
+				details.push(...formatIssues('body', parsed.error.issues as ZodIssue[]))
 			else req.body = parsed.data
 		}
 
 		if (schemas.query) {
 			const parsed = schemas.query.safeParse(req.query)
-			if (!parsed.success) details.push(...formatIssues('query', parsed.error.issues as ZodIssue[]))
+			if (!parsed.success)
+				details.push(...formatIssues('query', parsed.error.issues as ZodIssue[]))
 			else Object.assign(req.query as object, parsed.data as object)
 		}
 
 		if (schemas.params) {
 			const parsed = schemas.params.safeParse(req.params)
-			if (!parsed.success) details.push(...formatIssues('params', parsed.error.issues as ZodIssue[]))
+			if (!parsed.success)
+				details.push(...formatIssues('params', parsed.error.issues as ZodIssue[]))
 			else Object.assign(req.params as object, parsed.data as object)
 		}
 
 		if (details.length > 0) {
 			return next(
-				new AppError('VALIDATION_ERROR', 400, 'Request body did not pass validation.', details),
+				new AppError(
+					'VALIDATION_ERROR',
+					400,
+					'Request body did not pass validation.',
+					details,
+				),
 			)
 		}
 

@@ -9,7 +9,12 @@ import type { Knex } from 'knex'
 const createTokenTable = (knex: Knex, tableName: string) =>
 	knex.schema.createTable(tableName, (table) => {
 		table.string('token_hash', 64).primary()
-		table.uuid('user_id').notNullable().references('id').inTable('users').onDelete('CASCADE')
+		table
+			.uuid('user_id')
+			.notNullable()
+			.references('id')
+			.inTable('users')
+			.onDelete('CASCADE')
 		table.timestamp('expires_at', { useTz: true }).notNullable()
 		table.timestamp('created_at', { useTz: true }).notNullable().defaultTo(knex.fn.now())
 		table.index('user_id', `${tableName}_user_id_index`)

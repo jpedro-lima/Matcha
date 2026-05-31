@@ -1,11 +1,14 @@
 #!/bin/sh
 # Entrypoint wrapper do container `minio` do matcha. Sobe o servidor em
-# background, aguarda readiness, garante o bucket + policy de leitura
-# pública, e devolve o foreground para o processo do servidor (para que o
+# background, aguarda readiness, garante o bucket (sem policy pública),
+# e devolve o foreground para o processo do servidor (para que o
 # `docker stop` envie SIGTERM ao minio, não ao wrapper).
 #
 # Idempotente: rodar várias vezes não recria nada — `mc mb -p` ignora
-# bucket existente e `mc anonymous set download` é determinístico.
+# bucket existente e `mc anonymous set none` é determinístico.
+#
+# Bucket é PRIVADO: clientes só conseguem GET/PUT via signed URLs
+# emitidas pela API (TTL curto). Ver app/api/src/common/services/s3.service.ts.
 
 set -e
 
@@ -28,11 +31,11 @@ until mc alias set local http://localhost:9000 \
 	sleep 1
 done
 
-# 4. Bootstrap idempotente: cria bucket (-p ignora se já existe) + policy
-#    de leitura pública. Controle de acesso real fica nas rotas da API.
+# 4. Bootstrap idempotente: cria bucket (-p ignora se já existe) e
+#    força policy "none" (privado). Acesso só via signed URLs da API.
 mc mb -p "local/${BUCKET}" >/dev/null
-mc anonymous set download "local/${BUCKET}" >/dev/null
-echo "[minio] bucket '${BUCKET}' ready"
+mc anonymous set none "local/${BUCKET}" >/dev/null
+echo "[minio] bucket '${BUCKET}' ready (private)"
 
 # 5. Devolve o foreground ao servidor — bloqueia até ele sair.
 wait "$MINIO_PID"

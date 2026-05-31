@@ -69,8 +69,8 @@ const profileRow = {
 beforeEach(() => {
 	vi.clearAllMocks()
 	dbMock.mockReturnValue(dbBuilder)
-	dbMock.transaction.mockImplementation(async (cb: (trx: typeof dbMock) => Promise<unknown>) =>
-		cb(dbMock),
+	dbMock.transaction.mockImplementation(
+		async (cb: (trx: typeof dbMock) => Promise<unknown>) => cb(dbMock),
 	)
 	dbBuilder.where.mockReturnValue(dbBuilder)
 	dbBuilder.whereNot.mockReturnValue(dbBuilder)
@@ -154,7 +154,9 @@ describe('userService.updateUser', () => {
 		await updateUser('user-1', { bio: 'novo bio' })
 
 		expect(dbMock).toHaveBeenCalledWith('profiles')
-		expect(dbBuilder.update).toHaveBeenCalledWith(expect.objectContaining({ bio: 'novo bio' }))
+		expect(dbBuilder.update).toHaveBeenCalledWith(
+			expect.objectContaining({ bio: 'novo bio' }),
+		)
 	})
 
 	it('updates both tables in a single transaction when fields span users + profiles', async () => {
@@ -166,7 +168,9 @@ describe('userService.updateUser', () => {
 		expect(dbBuilder.update).toHaveBeenCalledWith(
 			expect.objectContaining({ first_name: 'Annie' }),
 		)
-		expect(dbBuilder.update).toHaveBeenCalledWith(expect.objectContaining({ bio: 'novo' }))
+		expect(dbBuilder.update).toHaveBeenCalledWith(
+			expect.objectContaining({ bio: 'novo' }),
+		)
 	})
 
 	it('on email change: rejects EMAIL_EXISTS when new email belongs to another user', async () => {
@@ -187,7 +191,11 @@ describe('userService.updateUser', () => {
 		// 2,3) getProfile reads no fim
 		dbBuilder.first
 			.mockResolvedValueOnce(undefined)
-			.mockResolvedValueOnce({ ...userRow, email: 'new@matcha.local', email_verified: false })
+			.mockResolvedValueOnce({
+				...userRow,
+				email: 'new@matcha.local',
+				email_verified: false,
+			})
 			.mockResolvedValueOnce(profileRow)
 
 		await updateUser('user-1', { email: 'new@matcha.local' })
@@ -202,18 +210,27 @@ describe('userService.updateUser', () => {
 		expect(dbBuilder.delete).toHaveBeenCalled()
 		// Novo token + e-mail.
 		expect(issueEmailToken).toHaveBeenCalledWith('user-1', dbMock)
-		expect(sendVerificationEmail).toHaveBeenCalledWith('new@matcha.local', 'new-email-token')
+		expect(sendVerificationEmail).toHaveBeenCalledWith(
+			'new@matcha.local',
+			'new-email-token',
+		)
 	})
 
 	it('on email change: SMTP failure is logged silently (not propagated)', async () => {
 		dbBuilder.first
 			.mockResolvedValueOnce(undefined)
-			.mockResolvedValueOnce({ ...userRow, email: 'new@matcha.local', email_verified: false })
+			.mockResolvedValueOnce({
+				...userRow,
+				email: 'new@matcha.local',
+				email_verified: false,
+			})
 			.mockResolvedValueOnce(profileRow)
 		vi.mocked(sendVerificationEmail).mockRejectedValueOnce(new Error('smtp down'))
 
 		// Não deve rejeitar; falha de e-mail é só log.
-		await expect(updateUser('user-1', { email: 'new@matcha.local' })).resolves.toBeDefined()
+		await expect(
+			updateUser('user-1', { email: 'new@matcha.local' }),
+		).resolves.toBeDefined()
 	})
 
 	it('no-op patch (empty body): does not touch db.transaction nor any update', async () => {

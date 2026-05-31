@@ -10,17 +10,37 @@ import {
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 import { env } from '../../config/env.js'
 
-const client = new S3Client({
+const credentials = {
+	accessKeyId: env.S3_ACCESS_KEY,
+	secretAccessKey: env.S3_SECRET_KEY,
+}
+
+// Client interno: usado pelas operações que rodam server-side (head,
+// delete, getRange). Acessa MinIO pela rede docker.
+const internalClient = new S3Client({
 	endpoint: env.S3_ENDPOINT,
 	region: env.S3_REGION,
-	credentials: {
-		accessKeyId: env.S3_ACCESS_KEY,
-		secretAccessKey: env.S3_SECRET_KEY,
-	},
+	credentials,
 	forcePathStyle: true,
+	requestChecksumCalculation: 'WHEN_REQUIRED',
+	responseChecksumValidation: 'WHEN_REQUIRED',
 })
 
-const PRESIGN_TTL_SECONDS = 5 * 60
+// Client "público": usado APENAS para gerar URLs que o navegador do
+// usuário vai consumir (PUT presigned + GET presigned). O endpoint
+// precisa ser alcançável de fora do docker, senão a signature inclui
+// um host que o cliente não acessa.
+const signingClient = new S3Client({
+	endpoint: env.S3_PUBLIC_URL,
+	region: env.S3_REGION,
+	credentials,
+	forcePathStyle: true,
+	requestChecksumCalculation: 'WHEN_REQUIRED',
+	responseChecksumValidation: 'WHEN_REQUIRED',
+})
+
+const PUT_TTL_SECONDS = 5 * 60
+const GET_TTL_SECONDS = 60 * 60
 
 export async function presignPut(
 	key: string,
@@ -33,11 +53,19 @@ export async function presignPut(
 		ContentType: contentType,
 		ContentLength: contentLength,
 	})
-	const uploadUrl = await getSignedUrl(client, cmd, { expiresIn: PRESIGN_TTL_SECONDS })
+	const uploadUrl = await getSignedUrl(signingClient, cmd, { expiresIn: PUT_TTL_SECONDS })
 	return {
 		uploadUrl,
-		expiresAt: new Date(Date.now() + PRESIGN_TTL_SECONDS * 1000),
+		expiresAt: new Date(Date.now() + PUT_TTL_SECONDS * 1000),
 	}
+}
+
+export async function presignGet(
+	key: string,
+	ttlSeconds = GET_TTL_SECONDS,
+): Promise<string> {
+	const cmd = new GetObjectCommand({ Bucket: env.S3_BUCKET, Key: key })
+	return getSignedUrl(signingClient, cmd, { expiresIn: ttlSeconds })
 }
 
 export type HeadResult = {
@@ -47,7 +75,7 @@ export type HeadResult = {
 
 export async function head(key: string): Promise<HeadResult | null> {
 	try {
-		const res: HeadObjectCommandOutput = await client.send(
+		const res: HeadObjectCommandOutput = await internalClient.send(
 			new HeadObjectCommand({ Bucket: env.S3_BUCKET, Key: key }),
 		)
 		return {
@@ -56,12 +84,17 @@ export async function head(key: string): Promise<HeadResult | null> {
 		}
 	} catch (err) {
 		if (err instanceof NotFound) return null
+		// MinIO devolve 403 (sem detail) em HEAD para objetos ausentes em
+		// alguns cenários — tratamos como not-found também.
+		const status = (err as { $metadata?: { httpStatusCode?: number } })?.$metadata
+			?.httpStatusCode
+		if (status === 404 || status === 403) return null
 		throw err
 	}
 }
 
 export async function getRange(key: string, bytes: number): Promise<Buffer> {
-	const res = await client.send(
+	const res = await internalClient.send(
 		new GetObjectCommand({
 			Bucket: env.S3_BUCKET,
 			Key: key,
@@ -79,9 +112,5 @@ export async function getRange(key: string, bytes: number): Promise<Buffer> {
 }
 
 export async function deleteObject(key: string): Promise<void> {
-	await client.send(new DeleteObjectCommand({ Bucket: env.S3_BUCKET, Key: key }))
-}
-
-export function publicUrl(key: string): string {
-	return `${env.S3_PUBLIC_URL}/${key}`
+	await internalClient.send(new DeleteObjectCommand({ Bucket: env.S3_BUCKET, Key: key }))
 }

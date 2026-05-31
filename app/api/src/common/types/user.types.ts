@@ -42,7 +42,9 @@ export function userFromRow(row: UserRow): User {
 	}
 }
 
-export function publicUserFromRow(row: Pick<UserRow, 'id' | 'email' | 'username' | 'email_verified'>): PublicUser {
+export function publicUserFromRow(
+	row: Pick<UserRow, 'id' | 'email' | 'username' | 'email_verified'>,
+): PublicUser {
 	return {
 		id: row.id,
 		email: row.email,

@@ -19,7 +19,11 @@ export const errorHandler: ErrorRequestHandler = (err, req, res, _next) => {
 
 	if (isAppError(err)) {
 		const body: ErrorBody = {
-			error: { code: err.code, message: err.message, ...(err.details !== undefined ? { details: err.details } : {}) },
+			error: {
+				code: err.code,
+				message: err.message,
+				...(err.details !== undefined ? { details: err.details } : {}),
+			},
 		}
 		log.warn({ err: { code: err.code, status: err.status } }, 'handled AppError')
 		res.status(err.status).json(body)

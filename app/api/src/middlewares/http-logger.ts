@@ -8,7 +8,8 @@ export const httpLogger = pinoHttp({
 	logger,
 	genReqId(req, res) {
 		const incoming = req.headers[REQUEST_ID_HEADER]
-		const id = typeof incoming === 'string' && incoming.length > 0 ? incoming : randomUUID()
+		const id =
+			typeof incoming === 'string' && incoming.length > 0 ? incoming : randomUUID()
 		res.setHeader(REQUEST_ID_HEADER, id)
 		return id
 	},

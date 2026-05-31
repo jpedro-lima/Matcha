@@ -1,7 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { hashPassword, verifyPassword } from '../../../common/services/bcrypt.service.js'
-import { sendPasswordResetEmail, sendVerificationEmail } from '../../../common/services/email.service.js'
-import { signAccess, signRefresh, verifyRefresh } from '../../../common/services/jwt.service.js'
+import {
+	sendPasswordResetEmail,
+	sendVerificationEmail,
+} from '../../../common/services/email.service.js'
+import {
+	signAccess,
+	signRefresh,
+	verifyRefresh,
+} from '../../../common/services/jwt.service.js'
 import {
 	consumeEmailToken,
 	consumePasswordResetToken,
@@ -75,8 +82,8 @@ beforeEach(() => {
 	// Toda chamada `db(table)` (e `trx(table)` dentro da transação) cai no
 	// mesmo builder — assim os assertions valem para o caminho com transação.
 	dbMock.mockReturnValue(dbBuilder)
-	dbMock.transaction.mockImplementation(async (cb: (trx: typeof dbMock) => Promise<unknown>) =>
-		cb(dbMock),
+	dbMock.transaction.mockImplementation(
+		async (cb: (trx: typeof dbMock) => Promise<unknown>) => cb(dbMock),
 	)
 	// Builder chain: where(...).first()  and  insert(...).returning(...)
 	dbBuilder.where.mockReturnValue(dbBuilder)
@@ -167,7 +174,10 @@ describe('authService.register', () => {
 
 		// O segundo argumento é o executor de trx; aqui o próprio dbMock atua como trx.
 		expect(issueEmailToken).toHaveBeenCalledWith('user-123', dbMock)
-		expect(sendVerificationEmail).toHaveBeenCalledWith(validInput.email, 'email-token-abc')
+		expect(sendVerificationEmail).toHaveBeenCalledWith(
+			validInput.email,
+			'email-token-abc',
+		)
 
 		expect(result).toEqual({
 			user: {
@@ -215,7 +225,10 @@ describe('authService.resendVerificationEmail', () => {
 
 		expect(dbBuilder.where).toHaveBeenCalledWith({ email: 'ana@matcha.local' })
 		expect(issueEmailToken).toHaveBeenCalledWith('user-123')
-		expect(sendVerificationEmail).toHaveBeenCalledWith('ana@matcha.local', 'email-token-abc')
+		expect(sendVerificationEmail).toHaveBeenCalledWith(
+			'ana@matcha.local',
+			'email-token-abc',
+		)
 	})
 
 	it('is silent (no token, no send) when the email is unknown — anti-enumeration', async () => {
@@ -327,9 +340,7 @@ describe('authService.login', () => {
 		expect(signAccess).toHaveBeenCalledWith(
 			expect.objectContaining({ sub: 'user-123', username: 'ana' }),
 		)
-		expect(signRefresh).toHaveBeenCalledWith(
-			expect.objectContaining({ sub: 'user-123' }),
-		)
+		expect(signRefresh).toHaveBeenCalledWith(expect.objectContaining({ sub: 'user-123' }))
 		expect(result).toEqual({
 			accessToken: 'access-jwt',
 			refreshToken: 'refresh-jwt',

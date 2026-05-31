@@ -24,9 +24,24 @@ type SeedUser = {
 
 const users: SeedUser[] = [
 	{ email: 'ana@matcha.local', username: 'ana', first_name: 'Ana', last_name: 'Souza' },
-	{ email: 'bruno@matcha.local', username: 'bruno', first_name: 'Bruno', last_name: 'Lima' },
-	{ email: 'carla@matcha.local', username: 'carla', first_name: 'Carla', last_name: 'Martins' },
-	{ email: 'diego@matcha.local', username: 'diego', first_name: 'Diego', last_name: 'Pereira' },
+	{
+		email: 'bruno@matcha.local',
+		username: 'bruno',
+		first_name: 'Bruno',
+		last_name: 'Lima',
+	},
+	{
+		email: 'carla@matcha.local',
+		username: 'carla',
+		first_name: 'Carla',
+		last_name: 'Martins',
+	},
+	{
+		email: 'diego@matcha.local',
+		username: 'diego',
+		first_name: 'Diego',
+		last_name: 'Pereira',
+	},
 	{ email: 'eva@matcha.local', username: 'eva', first_name: 'Eva', last_name: 'Costa' },
 ]
 
