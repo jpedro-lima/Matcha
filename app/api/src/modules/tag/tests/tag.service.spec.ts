@@ -1,5 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { recalculateCompleteness } from '../../../common/services/completeness.service.js'
 import { getUserTags, replaceUserTags, searchTags } from '../tag.service.js'
+
+vi.mock('../../../common/services/completeness.service.js', () => ({
+	recalculateCompleteness: vi.fn(),
+}))
 
 const dbBuilder = vi.hoisted(() => ({
 	where: vi.fn(),
@@ -116,6 +121,16 @@ describe('tagService.replaceUserTags', () => {
 		expect(dbBuilder.delete).toHaveBeenCalled()
 		expect(dbBuilder.insert).not.toHaveBeenCalled()
 		expect(result).toEqual([])
+	})
+
+	it('dispara recalculateCompleteness DENTRO da transação (passa trx)', async () => {
+		dbBuilder.select.mockResolvedValueOnce([{ id: 7, name: 'music' }])
+
+		await replaceUserTags('user-1', ['music'])
+
+		// O segundo arg passado é o executor — deve ser o próprio dbMock (que
+		// faz papel de trx no nosso mock de transaction).
+		expect(recalculateCompleteness).toHaveBeenCalledWith('user-1', dbMock)
 	})
 })
 

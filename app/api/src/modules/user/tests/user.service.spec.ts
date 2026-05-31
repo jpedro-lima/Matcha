@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { recalculateCompleteness } from '../../../common/services/completeness.service.js'
 import { sendVerificationEmail } from '../../../common/services/email.service.js'
 import { issueEmailToken } from '../../../common/services/token.service.js'
 import { AppError } from '../../../utils/app-error.js'
@@ -13,6 +14,9 @@ vi.mock('../../../common/services/token.service.js', () => ({
 	consumeEmailToken: vi.fn(),
 	issuePasswordResetToken: vi.fn(),
 	consumePasswordResetToken: vi.fn(),
+}))
+vi.mock('../../../common/services/completeness.service.js', () => ({
+	recalculateCompleteness: vi.fn(),
 }))
 
 // `dbBuilder` mocka o query-builder do knex. As mesmas funções respondem
@@ -174,7 +178,6 @@ describe('userService.updateUser', () => {
 	})
 
 	it('on email change: rejects EMAIL_EXISTS when new email belongs to another user', async () => {
-		// Primeira `first` = duplicate check, retorna outro user.
 		dbBuilder.first.mockResolvedValueOnce({ id: 'other-user' })
 
 		await expect(updateUser('user-1', { email: 'taken@x.com' })).rejects.toMatchObject({
@@ -182,13 +185,10 @@ describe('userService.updateUser', () => {
 			status: 409,
 		} as Partial<AppError>)
 
-		// Não chegou a iniciar transação.
 		expect(dbMock.transaction).not.toHaveBeenCalled()
 	})
 
 	it('on email change: resets email_verified, drops old tokens, issues new one and sends email', async () => {
-		// 1) duplicate check → undefined (email livre)
-		// 2,3) getProfile reads no fim
 		dbBuilder.first
 			.mockResolvedValueOnce(undefined)
 			.mockResolvedValueOnce({
@@ -201,14 +201,11 @@ describe('userService.updateUser', () => {
 		await updateUser('user-1', { email: 'new@matcha.local' })
 
 		expect(dbMock.transaction).toHaveBeenCalledTimes(1)
-		// users update inclui email + email_verified=false.
 		expect(dbBuilder.update).toHaveBeenCalledWith(
 			expect.objectContaining({ email: 'new@matcha.local', email_verified: false }),
 		)
-		// Tokens antigos do user invalidados.
 		expect(dbMock).toHaveBeenCalledWith('email_tokens')
 		expect(dbBuilder.delete).toHaveBeenCalled()
-		// Novo token + e-mail.
 		expect(issueEmailToken).toHaveBeenCalledWith('user-1', dbMock)
 		expect(sendVerificationEmail).toHaveBeenCalledWith(
 			'new@matcha.local',
@@ -227,7 +224,6 @@ describe('userService.updateUser', () => {
 			.mockResolvedValueOnce(profileRow)
 		vi.mocked(sendVerificationEmail).mockRejectedValueOnce(new Error('smtp down'))
 
-		// Não deve rejeitar; falha de e-mail é só log.
 		await expect(
 			updateUser('user-1', { email: 'new@matcha.local' }),
 		).resolves.toBeDefined()
@@ -246,7 +242,6 @@ describe('userService.updateUser', () => {
 describe('userService.updateLocation', () => {
 	it('on consent=true: persists lat/lng and clears city/neighborhood', async () => {
 		dbBuilder.update.mockResolvedValueOnce(1)
-		// getProfile reads: users + profiles
 		dbBuilder.first.mockResolvedValueOnce(userRow).mockResolvedValueOnce(profileRow)
 
 		await updateLocation('user-1', {
@@ -300,5 +295,14 @@ describe('userService.updateLocation', () => {
 		await updateLocation('user-1', { consent: true, latitude: 0, longitude: 0 })
 
 		expect(dbMock.transaction).not.toHaveBeenCalled()
+	})
+
+	it('dispara recalculateCompleteness após o update', async () => {
+		dbBuilder.update.mockResolvedValueOnce(1)
+		dbBuilder.first.mockResolvedValueOnce(userRow).mockResolvedValueOnce(profileRow)
+
+		await updateLocation('user-1', { consent: true, latitude: 0, longitude: 0 })
+
+		expect(recalculateCompleteness).toHaveBeenCalledWith('user-1')
 	})
 })

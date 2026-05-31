@@ -1,3 +1,4 @@
+import { recalculateCompleteness } from '../../common/services/completeness.service.js'
 import { db } from '../../config/db.js'
 import type { Tag, TagRow } from './tag.types.js'
 import { tagFromRow } from './tag.types.js'
@@ -19,6 +20,8 @@ export async function replaceUserTags(userId: string, names: string[]): Promise<
 	return db.transaction(async (trx) => {
 		if (unique.length === 0) {
 			await trx('user_tags').where({ user_id: userId }).delete()
+
+			await recalculateCompleteness(userId, trx)
 			return []
 		}
 
@@ -33,6 +36,8 @@ export async function replaceUserTags(userId: string, names: string[]): Promise<
 
 		await trx('user_tags').where({ user_id: userId }).delete()
 		await trx('user_tags').insert(tagRows.map((t) => ({ user_id: userId, tag_id: t.id })))
+
+		await recalculateCompleteness(userId, trx)
 
 		return tagRows.sort((a, b) => a.name.localeCompare(b.name)).map(tagFromRow)
 	})

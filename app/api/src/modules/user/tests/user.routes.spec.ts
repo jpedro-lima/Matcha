@@ -2,15 +2,12 @@ import request from 'supertest'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { AppError } from '../../../utils/app-error.js'
 
-// Mock the whole user service — integration test focuses on HTTP wiring
-// (validate, requireAuth, error handler, status codes).
 vi.mock('../user.service.js', () => ({
 	getProfile: vi.fn(),
 	updateUser: vi.fn(),
 	updateLocation: vi.fn(),
 }))
 
-// requireAuth uses jwt.service — mock para evitar assinatura real.
 vi.mock('../../../common/services/jwt.service.js', () => ({
 	signAccess: vi.fn(),
 	signRefresh: vi.fn(),
@@ -18,14 +15,10 @@ vi.mock('../../../common/services/jwt.service.js', () => ({
 	verifyRefresh: vi.fn(),
 }))
 
-// Disables rate limit (não há na rota de user mas o module-level mock
-// vale para todas as integrações de http).
 vi.mock('express-rate-limit', () => ({
 	default: () => (_req: unknown, _res: unknown, next: () => void) => next(),
 }))
 
-// db é usado por outras rotas montadas; só precisamos do mock pra não
-// falhar o import de `app`.
 const dbBuilder = vi.hoisted(() => ({
 	where: vi.fn(),
 	first: vi.fn(),

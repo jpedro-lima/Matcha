@@ -21,7 +21,12 @@ vi.mock('file-type', () => ({
 	fileTypeFromBuffer: vi.fn(),
 }))
 
+vi.mock('../../../common/services/completeness.service.js', () => ({
+	recalculateCompleteness: vi.fn(),
+}))
+
 import { fileTypeFromBuffer } from 'file-type'
+import { recalculateCompleteness } from '../../../common/services/completeness.service.js'
 
 vi.mock('node:crypto', async () => {
 	const actual = await vi.importActual<typeof import('node:crypto')>('node:crypto')
@@ -186,6 +191,23 @@ describe('photoService.confirmPhoto', () => {
 			status: 400,
 		} as Partial<AppError>)
 		expect(deleteObject).toHaveBeenCalledWith('user-1/photo-1')
+	})
+
+	it('dispara recalculateCompleteness após marcar ready', async () => {
+		dbBuilder.first.mockResolvedValueOnce(PHOTO_ROW)
+		vi.mocked(head).mockResolvedValueOnce({
+			contentLength: 120000,
+			contentType: 'image/webp',
+		})
+		vi.mocked(getRange).mockResolvedValueOnce(Buffer.from('RIFF....WEBP'))
+		vi.mocked(fileTypeFromBuffer).mockResolvedValueOnce({
+			mime: 'image/webp',
+			ext: 'webp',
+		})
+
+		await confirmPhoto('user-1', 'photo-1')
+
+		expect(recalculateCompleteness).toHaveBeenCalledWith('user-1')
 	})
 
 	it('marca ready e devolve foto com signed URL quando tudo bate', async () => {

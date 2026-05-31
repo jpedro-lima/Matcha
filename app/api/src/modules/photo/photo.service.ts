@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { fileTypeFromBuffer } from 'file-type'
+import { recalculateCompleteness } from '../../common/services/completeness.service.js'
 import {
 	deleteObject,
 	getRange,
@@ -92,6 +93,7 @@ export async function confirmPhoto(userId: string, photoId: string): Promise<Pho
 	}
 
 	await db('photos').where({ id: photoId }).update({ status: 'ready' })
+	await recalculateCompleteness(userId)
 	const url = await presignGet(row.key)
 	return photoFromRow({ ...row, status: 'ready' }, url)
 }

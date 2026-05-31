@@ -248,9 +248,9 @@ curl -sk https://localhost/uploads/idontexist.txt -o /dev/null -w '%{http_code}\
 
 **Instalar (delta):** `file-type` (runtime — validação de magic bytes via stream parcial).
 
-48. **Migration `photos`** (`npm run migrate:make -- photos`) — `id uuid PK default gen_random_uuid()`, `user_id uuid FK CASCADE`, `key text NOT NULL UNIQUE`, `mime varchar(32)`, `bytes int`, `is_profile bool default false`, `status varchar(16) NOT NULL default 'pending'` (`pending`/`ready`/`failed`), `created_at timestamptz default now()`. Índice em `user_id`. Constraint parcial única em `(user_id) WHERE is_profile = true`.
-49. **`POST /users/me/photos/presign`** — body `{ contentType, size }`. Service valida: `contentType ∈ {image/jpeg, image/png, image/webp}`, `size ≤ 5MB`, user tem `< 5` fotos com `status ∈ ('ready', 'pending')`. Gera `photoId`, `key = <userId>/<photoId>`, chama `s3.presignPut`, insere linha `status='pending'`, retorna `{ photoId, uploadUrl, expiresAt }`.
-50. **`POST /users/me/photos/:id/confirm`** — service faz `s3.head(key)`; se 404 → marca `failed`, retorna `404 PHOTO_NOT_FOUND`. Valida `content-length`/`content-type` retornados pelo MinIO contra o que foi declarado no presign. Baixa primeiros 32 bytes via `s3.getRange`, passa pelo `file-type` — se MIME real ≠ declarado → `s3.delete` + marca `failed` + retorna `400 INVALID_FILE_TYPE`. Sucesso → `status='ready'`, retorna `{ id, url, isProfile }`. **`DELETE /users/me/photos/:id`** apaga linha + chama `s3.delete`. **`PATCH /users/me/photos/:id/profile`** atualiza a invariante "única `is_profile=true` por user" em transação.
+48. **Migration `photos`** (`npm run migrate:make -- photos`) ✅ — `id uuid PK default gen_random_uuid()`, `user_id uuid FK CASCADE`, `key text NOT NULL UNIQUE`, `mime varchar(32)`, `bytes int`, `status varchar(16) NOT NULL default 'pending'` (`pending`/`ready`/`failed`), `created_at timestamptz default now()`. Índice em `user_id`. (Designação de foto de perfil dropada — não há `is_profile` por decisão da Fase 5.4.)
+49. **`POST /users/me/photos/presign`** ✅ — body `{ contentType, size }`. Service valida: `contentType ∈ {image/jpeg, image/png, image/webp}`, `size ≤ 5MB`, user tem `< 5` fotos com `status ∈ ('ready', 'pending')`. Gera `photoId`, `key = <userId>/<photoId>`, chama `s3.presignPut`, insere linha `status='pending'`, retorna `{ photoId, uploadUrl, expiresAt }`.
+50. **`POST /users/me/photos/:id/confirm`** ✅ — service faz `s3.head(key)`; se 404/403 → marca `failed`, retorna `404 PHOTO_NOT_UPLOADED`. Valida `content-length`/`content-type` retornados pelo MinIO contra o que foi declarado no presign. Baixa primeiros 32 bytes via `s3.getRange`, passa pelo `file-type` — se MIME real ≠ declarado → `s3.delete` + marca `failed` + retorna `400 INVALID_FILE_TYPE`. Sucesso → `status='ready'`, retorna `{ id, url, mime, bytes, status }`. **`DELETE /users/me/photos/:id`** ✅ apaga linha + chama `s3.delete`. **`GET /users/me/photos`** ✅ lista fotos do usuário (excluindo `failed`).
 
 > **Limpeza de fotos órfãs** (linhas `status='pending'` que nunca foram confirmadas) **fica adiada para a Fase 10** — não é caminho crítico para a feature funcionar.
 
@@ -275,17 +275,17 @@ curl -sk -X POST https://localhost/api/users/me/photos/$ID/confirm \
 # 4. Browser: abrir o url devolvido — imagem é servida pelo nginx (cache 7d)
 ```
 
-### Fase 5.5 — Tags
+### Fase 5.5 — Tags ✅
 
-51. **Migration `tags_user_tags`** (`npm run migrate:make -- tags_user_tags`) — `tags(id serial PK, name varchar UNIQUE lowercase)` + `user_tags(user_id FK CASCADE, tag_id FK CASCADE, PK composta)`. **`GET /users/me/tags`** lista tags do user. **`PUT /users/me/tags`** substitui todo o conjunto em transação: cria tags ausentes (lowercase, sem `#`), insere `user_tags`, remove vínculos que sobraram. **`GET /tags?query=`** autocomplete (top 20 por prefixo, ordenado por uso).
+51. **Migration `tags_user_tags`** ✅ — `tags(id serial PK, name varchar(40) UNIQUE, created_at)` + `user_tags(user_id FK CASCADE, tag_id FK CASCADE, PK composta, idx em tag_id)`. **`GET /users/me/tags`** ✅ lista tags do user ordenadas por nome. **`PUT /users/me/tags`** ✅ substitui todo o conjunto em transação: schema normaliza (trim+lowercase+strip `#`) e valida regex `[a-z0-9-]`, service deduplica + `INSERT ... ON CONFLICT DO NOTHING` em `tags`, deleta vínculos antigos e cria os novos. Limite: 20 tags por user. **`GET /tags?query=`** ✅ autocomplete (LIMIT 20 por prefixo, `ORDER BY count(user_tags) DESC, name ASC`). Query schema só aceita `[a-z0-9-]+` — bloqueia wildcards `%`/`_` do LIKE.
 
-**Checkpoint:** `PUT /users/me/tags` com `["vegan", "Music", "music"]` cria 2 tags únicas (`vegan`, `music`) e vincula ambas ao user. `GET /tags?query=mu` retorna `music`.
+**Checkpoint:** ✅ `PUT /users/me/tags` com `["vegan","Music","music"]` cria 2 tags únicas (`vegan`, `music`) e vincula ambas ao user. `GET /tags?query=mu` retorna `music`.
 
-### Fase 5.6 — Completude
+### Fase 5.6 — Completude ✅
 
-52. **`profile_completed_at` hook** — função compartilhada `recalculateCompleteness(userId, trx)` chamada ao fim de `PATCH /users/me`, `PATCH /users/me/location`, `POST /photos/:id/confirm`, `PUT /users/me/tags`. Marca `profile_completed_at = now()` quando todos os campos obrigatórios (gender, orientation, bio, birthDate, location, ≥ 1 foto `status='ready'`, ≥ 1 tag) estão presentes E o timestamp ainda é NULL.
+52. **`profile_completed_at` hook** ✅ — `common/services/completeness.service.ts#recalculateCompleteness(userId, executor?)` chamado ao fim de `PATCH /users/me`, `PATCH /users/me/location`, `POST /photos/:id/confirm`, e **dentro da transação** do `PUT /users/me/tags`. Marca `profile_completed_at = now()` quando todos os sinais (`bio`, `gender`, `sexual_orientation`, `birth_date`, `location_consent ≠ null`, ≥ 1 foto `ready`, ≥ 1 tag) estão presentes E o timestamp ainda é NULL. **One-way**: não regride.
 
-**Checkpoint final da Fase 5:** completar um perfil end-to-end via curl (sequência: `PATCH /users/me` com bio/gender/orientation/birthDate → `PATCH /location` → 3-step photo flow até `ready` + `isProfile=true` → `PUT /users/me/tags`), e validar `select profile_completed_at from profiles` retorna timestamp populado.
+**Checkpoint final da Fase 5:** ✅ E2E via curl prova que o timestamp só preenche no último passo (PUT tag) e que mutações subsequentes não alteram o valor.
 
 ---
 

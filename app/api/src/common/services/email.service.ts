@@ -2,11 +2,6 @@ import nodemailer, { type Transporter } from 'nodemailer'
 import { env } from '../../config/env.js'
 import { logger } from '../../config/logger.js'
 
-// Wrapper de Nodemailer. Sem testes unitários — os orquestradores que usam
-// (`auth-service.register`, `auth-service.forgotPassword`) mockam essa função
-// para validar contrato. Em dev o transporte aponta para Mailtrap; em prod o
-// SMTP_* do env injeta credenciais reais.
-
 let cachedTransporter: Transporter | null = null
 
 function getTransporter(): Transporter {
@@ -29,7 +24,6 @@ type SendArgs = {
 
 async function send({ to, subject, text, html }: SendArgs): Promise<void> {
 	if (env.SMTP_DISABLED) {
-		// `text` já carrega o URL com o token raw — dá pra copiar do log.
 		logger.warn({ to, subject, text }, 'SMTP_DISABLED: email NOT sent (dev)')
 		return
 	}

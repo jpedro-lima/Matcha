@@ -1,3 +1,4 @@
+import { recalculateCompleteness } from '../../common/services/completeness.service.js'
 import { sendVerificationEmail } from '../../common/services/email.service.js'
 import { issueEmailToken } from '../../common/services/token.service.js'
 import { profileFromRow, type ProfileRow } from '../../common/types/profile.types.js'
@@ -85,15 +86,9 @@ export async function updateUser(
 		}
 	}
 
+	await recalculateCompleteness(userId)
 	return getProfile(userId)
 }
-
-// ── updateLocation ─────────────────────────────────────────────────
-
-// Atualiza localização do perfil. Os dois shapes da união discriminada
-// são mutuamente exclusivos — quando o usuário muda de GPS pra manual
-// (ou vice-versa), os campos do shape anterior são zerados pra não
-// deixar coords obsoletos junto com city/neighborhood novos.
 
 export async function updateLocation(
 	userId: string,
@@ -121,5 +116,6 @@ export async function updateLocation(
 		throw new AppError('NOT_FOUND', 404, 'Profile not found.')
 	}
 
+	await recalculateCompleteness(userId)
 	return getProfile(userId)
 }
