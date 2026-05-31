@@ -15,8 +15,6 @@ const credentials = {
 	secretAccessKey: env.S3_SECRET_KEY,
 }
 
-// Client interno: usado pelas operações que rodam server-side (head,
-// delete, getRange). Acessa MinIO pela rede docker.
 const internalClient = new S3Client({
 	endpoint: env.S3_ENDPOINT,
 	region: env.S3_REGION,
@@ -26,10 +24,6 @@ const internalClient = new S3Client({
 	responseChecksumValidation: 'WHEN_REQUIRED',
 })
 
-// Client "público": usado APENAS para gerar URLs que o navegador do
-// usuário vai consumir (PUT presigned + GET presigned). O endpoint
-// precisa ser alcançável de fora do docker, senão a signature inclui
-// um host que o cliente não acessa.
 const signingClient = new S3Client({
 	endpoint: env.S3_PUBLIC_URL,
 	region: env.S3_REGION,
@@ -84,8 +78,6 @@ export async function head(key: string): Promise<HeadResult | null> {
 		}
 	} catch (err) {
 		if (err instanceof NotFound) return null
-		// MinIO devolve 403 (sem detail) em HEAD para objetos ausentes em
-		// alguns cenários — tratamos como not-found também.
 		const status = (err as { $metadata?: { httpStatusCode?: number } })?.$metadata
 			?.httpStatusCode
 		if (status === 404 || status === 403) return null

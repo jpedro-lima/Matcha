@@ -18,9 +18,6 @@ export type Photo = {
 	status: PhotoStatus
 }
 
-// Mapper puro: a URL é gerada pelo service (presignGet) e injetada
-// aqui. Mantém esse arquivo livre de I/O — facilita testes e deixa o
-// type sem dependência circular com s3.service.
 export function photoFromRow(row: PhotoRow, url: string): Photo {
 	return {
 		id: row.id,
