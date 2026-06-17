@@ -291,36 +291,155 @@ curl -sk -X POST https://localhost/api/users/me/photos/$ID/confirm \
 
 ## Fase 6 — Descoberta (`/browse` e `/search`)
 
-> Objetivo: lista paginada de perfis sugeridos com ordenação inteligente e pesquisa avançada. Sem novas tabelas.
+> Objetivo: feed de **até 10 perfis** sugeridos, compatíveis com filtros opcionais e com **exclusão automática** de: self, perfis incompletos, contas não verificadas, quem o user já decidiu sobre (like ou dislike), bloqueios em qualquer direção e orientação incompatível. Subdividida em três entregas testáveis.
 
-> **TDD aplicado:** `matchService` (engine de browsing/search) é o caso mais óbvio — escreva primeiro testes que descrevem cenários (ordenação por distância, filtros de tags, exclusão de bloqueados, bissexual default), depois a query única.
+> **Pré-requisito não-óbvio:** `/browse` precisa filtrar por likes, dislikes e blocks **antes** desses ganharem "significado social" (match mútuo, notificações, UI de bloqueio). Por isso o schema dessas tabelas entra na Fase 6.1, **não** na Fase 7.
 
-53. **Service de matching** — query Knex única consolidando:
-    - filtro de orientação compatível (`COALESCE(profiles.sexual_orientation, 'bi')`),
-    - exclusão de bloqueados (ambos sentidos), já curtidos, próprio usuário, perfis sem foto, contas não verificadas,
-    - bounding box por lat/lng + distância em km (Haversine em SQL),
-    - score ponderado (proximidade ↑, tags em comum ↑, fame ↑).
-54. **`GET /browse`** com query params (`minAge`, `maxAge`, `minFame`, `maxFame`, `maxDistanceKm`, `tags`, `sortBy`, `order`, `page`, `limit`).
-55. **`GET /search`** — mesma engine, exigindo ao menos um critério no body/query.
-56. **Testes de regressão** para ordenação estável e prioridade de mesma área geográfica.
+> **TDD aplicado:** `browse.service` (engine de seleção e ordenação) — testes primeiro descrevendo cada critério de exclusão e cada filtro como cenário independente (mock do `dbBuilder`).
 
-**Checkpoint:** com os 5 usuários do seed + 5 perfis adicionais criados manualmente, validar que `/browse` para o usuário A retorna B–E ordenados por distância, e que filtrar `tags=vegan` reduz a lista corretamente.
+### Fase 6.1 — Schema de interações + helper de compatibilidade ✅
+
+53. **Migration `interactions_core`** (`npm run migrate:make -- interactions_core`):
+    - **`user_swipes`** — `swiper_id uuid FK users CASCADE`, `target_id uuid FK users CASCADE`, `decision varchar(8) CHECK (decision IN ('like','dislike'))`, `created_at timestamptz default now()`, **PK composta `(swiper_id, target_id)`**, `CHECK (swiper_id != target_id)`. Índice extra em `target_id` (consultas "quem me curtiu" na Fase 7). **A PK garante o invariante "uma decisão por par"** — rewind (dislike → like) vira `UPDATE`, não dupla-row.
+    - **`blocks`** — `blocker_id uuid FK CASCADE`, `blocked_id uuid FK CASCADE`, `created_at`, PK composta, `CHECK (blocker_id != blocked_id)`. Bloqueio é unidirecional na tabela; o filtro do browse aplica em ambos sentidos (`OR`).
+    - **SQL function `is_orientation_compatible(my_gender text, my_orient text, their_gender text, their_orient text) RETURNS bool`** cobrindo a matriz hetero/homo/bi/other. Regra: retorna `true` quando **cada lado está na "lista de procura" do outro**. `other` vira wildcard inclusivo nos dois eixos. NULL em orient default = `'bi'` (conforme spec).
+    - **SQL function `haversine_km(lat1, lon1, lat2, lon2) RETURNS double precision`** — distância em km via Haversine puro. Evita PostGIS no MVP.
+
+### Fase 6.2 — `browse.service.ts` ✅
+
+54. **`modules/browse/browse.service.ts#browseFor(userId, filters)`** — query Knex única em `users` + `profiles` que **em uma passada**:
+    - lê o perfil do `userId` (gender, orientation, lat, lng) — `with` clause ou subquery,
+    - exclui automaticamente: self, `email_verified=false`, `profile_completed_at IS NULL`, qualquer linha em `user_swipes` onde `swiper_id = userId` (independente da decisão), pares com `blocks` em qualquer direção, e via `is_orientation_compatible(...)`,
+    - aplica filtros opcionais do request: faixa etária via `birth_date`, faixa de `fame_rating`, `maxDistanceKm` via `haversine_km(...)`, overlap de `tags` via `EXISTS` em `user_tags`,
+    - calcula `distance_km`, `common_tags` (subquery contando `user_tags` em comum), e o `score` ponderado:
+
+      ```
+      score = (W_DISTANCE / (distance_km + 1)) + W_TAGS * common_tags + W_FAME * fame_rating
+      ```
+
+      (`+1` no denominador evita divisão por zero quando dois perfis estão no mesmo ponto; quanto menor a distância, maior o termo.)
+
+    - `ORDER BY score DESC, fame_rating DESC, users.id ASC` (último tiebreak garante paginação estável),
+    - busca `LIMIT $limit + 1` para popular `hasMore` sem segunda query.
+    - **Constantes no topo do arquivo do service**: `W_DISTANCE = 1`, `W_TAGS = 2`, `W_FAME = 0.5`. Sem env — afinar via PR.
+    - Retorna `{ items: [{id, username, age, gender, sexualOrientation, bio, distanceKm, commonTags, fameRating, photoUrl}], hasMore }`. `photoUrl` é a primeira foto `ready` (por `created_at`), assinada via `presignGet` (TTL 1h) — gerada em **batch** com `Promise.all` antes de devolver.
+
+### Fase 6.3 — `GET /browse` e `GET /search` ✅
+
+55. **`modules/browse/browse.routes.ts`** monta dois endpoints na mesma engine:
+    - **`GET /browse`** com `requireAuth` + `validate({ query: browseQuerySchema })`. Schema: `minAge`, `maxAge`, `minFame`, `maxFame`, `maxDistanceKm` (todos opcionais com bounds), `tags` (array via `?tags=a&tags=b`, cada item passa pelo `tagNameSchema` da Fase 5.5), `limit` (1-50, **default 10**), `cursor` (opaque base64 codificando `score|user_id` da última row da página anterior — pagination estável independente de novos likes do user). Resposta: `{ items, nextCursor }`.
+    - **`GET /search`** — **mesma engine, mesmo schema**, mas exige `≥ 1` filtro preenchido (`refine` no schema) — sem critério → `400 SEARCH_NO_CRITERIA`. Browse é "feed", Search é "consulta dirigida" — mesma SQL, contracts distintos.
+
+56. **Testes** em `modules/browse/tests/`:
+    - `browse.service.spec.ts` — mocka `db` e cobre **cada filtro isoladamente**: já curtido sai do feed, dislike sai, bloqueado sai (ambos sentidos), orientação incompatível sai, distância fora do raio sai, score ordena correto, `hasMore=true` quando query devolve `limit+1` rows.
+    - `browse.routes.spec.ts` — `supertest`: 401 sem auth, 400 com `limit > 50`, 400 `/search` sem critério, 200 com payload mockado do service.
+
+**Checkpoint Fase 6:**
+
+```bash
+# Pré-condição: seed adicional com 6 perfis completos (verified + profile_completed_at + 1 foto + 1 tag)
+# em raio de 50km do user logado, orientações variadas.
+
+TOKEN=$(curl -sk -X POST https://localhost/api/auth/login \
+  -d '{"username":"fase52","password":"Forte#2026!"}' -H ct:application/json | jq -r .accessToken)
+
+# 1. Browse default → até 10 perfis ordenados
+curl -sk https://localhost/api/browse -H "Authorization: Bearer $TOKEN" | jq '{count: (.items|length), hasMore}'
+
+# 2. Like um → some do próximo browse
+LIKED=$(curl -sk https://localhost/api/browse -H "Authorization: Bearer $TOKEN" | jq -r '.items[0].id')
+curl -sk -X POST https://localhost/api/users/$LIKED/like -H "Authorization: Bearer $TOKEN"   # vem na 7.1
+curl -sk https://localhost/api/browse -H "Authorization: Bearer $TOKEN" \
+  | jq --arg id $LIKED '.items | map(select(.id == $id)) | length'   # 0
+
+# 3. Dislike outro → some também
+DISLIKED=$(curl -sk https://localhost/api/browse -H "Authorization: Bearer $TOKEN" | jq -r '.items[0].id')
+curl -sk -X POST https://localhost/api/users/$DISLIKED/dislike -H "Authorization: Bearer $TOKEN"
+curl -sk https://localhost/api/browse -H "Authorization: Bearer $TOKEN" \
+  | jq --arg id $DISLIKED '.items | map(select(.id == $id)) | length'  # 0
+
+# 4. Filtro de tags em comum reduz lista
+curl -sk 'https://localhost/api/browse?tags=vegan' -H "Authorization: Bearer $TOKEN" | jq '.items | length'
+
+# 5. /search sem critério → 400
+curl -sk -o /dev/null -w '%{http_code}\n' https://localhost/api/search -H "Authorization: Bearer $TOKEN"   # 400
+```
 
 ---
 
-## Fase 7 — Visualização de perfil e interações
+## Fase 7 — Visualização de perfil e ações sociais
 
-> Objetivo: ver perfil alheio com flags de relacionamento, dar/remover like, reportar, bloquear.
+> Objetivo: ver perfil alheio com flags de relacionamento, gravar swipe (like/dislike), detectar match mútuo, registrar visitas, bloquear, reportar. **Schema de `user_swipes` e `blocks` já existe da Fase 6.1** — esta fase dá significado social.
 
-> **TDD aplicado:** `likeService` (regra de match mútuo), `blockService`, `reportService`, `visitService` — testes primeiro.
+> **TDD aplicado:** `swipe.service` (match detection, rewind), `view.service` (perfil público + relationship), `block.service`, `report.service` — testes primeiro.
 
-57. **Migration `interactions`** (`npm run migrate:make -- interactions`) — `likes`, `visits`, `blocks`, `reports` e **VIEW `matches`** (seção 7 do DOC).
-58. **`GET /users/:id`** — perfil público (sem `email`/`password_hash`); inclui `relationship: { iLiked, likedMe, matched, blocked }`; registra entrada em `visits` (exceto self) e enfileira notificação `visit` (a notificação real entra na Fase 9; por enquanto stub que apenas loga).
-59. **`POST /users/:id/like`** — exige foto de perfil; detecta match mútuo (cria entrada/atualiza VIEW e enfileira notificação `match`) ou `like` simples.
-60. **`DELETE /users/:id/like`** — remove like; se desfaz match, marca match removido e prepara hook para encerrar chat (Fase 8).
-61. **`POST /users/:id/report`** (motivo `fake_account` apenas, conforme especificação mínima), **`POST /users/:id/block` / `DELETE /users/:id/block`**.
+### Fase 7.1 — Swipes (like/dislike) + match detection
 
-**Checkpoint:** com usuário A logado, `GET /users/<B>` → 200 com `relationship.iLiked=false`. Após `POST /users/<B>/like` por A e mesmo por B, `GET /users/<B>` por A devolve `matched=true`.
+57. **Migration `interactions_matches`** (`npm run migrate:make -- interactions_matches`) — cria **VIEW `matches`**:
+    ```sql
+    CREATE VIEW matches AS
+      SELECT LEAST(a.swiper_id, b.swiper_id)    AS user_a,
+             GREATEST(a.swiper_id, b.swiper_id) AS user_b,
+             GREATEST(a.created_at, b.created_at) AS matched_at
+      FROM user_swipes a
+      JOIN user_swipes b
+        ON a.swiper_id = b.target_id AND a.target_id = b.swiper_id
+      WHERE a.decision='like' AND b.decision='like'
+        AND a.swiper_id < b.swiper_id;   -- evita duplicação simétrica
+    ```
+58. **Endpoints em `modules/swipe/swipe.routes.ts`** (handlers finos + `swipe.service`):
+    - **`POST /users/:id/like`** — `swipeUser(actorId, targetId, 'like')`. Pré-check: `actor` tem `profile_completed_at IS NOT NULL` (5.6) — senão `400 PROFILE_INCOMPLETE`. UPSERT em `user_swipes (decision='like')`. Após gravar, consulta VIEW `matches` pra detectar mútuo. Retorna `{ status: 'matched', matchedAt }` ou `{ status: 'liked' }`. Match → stub que loga (notificação real na Fase 9).
+    - **`POST /users/:id/dislike`** — `swipeUser(actorId, targetId, 'dislike')`. UPSERT `decision='dislike'`. Sem match detection. **204**.
+    - **`DELETE /users/:id/like`** — DELETE em `user_swipes` (rewind/unlike). Se desfaz match (consulta VIEW antes de apagar), marca evento pra hook de chat-close da Fase 8.
+
+### Fase 7.2 — Visualização de perfil (`GET /users/:id`)
+
+59. **`GET /users/:id`** em `modules/user/user.routes.ts` (extensão) — perfil público (sem `email`/`password_hash`):
+    - Resposta: `{ user, profile, photos, tags, relationship: { iLiked, iDisliked, likedMe, matched, blocked }, isOnline, lastActive, fameRating }`. `photos` com signed URLs TTL 1h (batch via `presignGet`).
+    - `relationship` calculado com 4 `EXISTS` rápidos em `user_swipes`/`blocks`/VIEW `matches` (sem JOIN pesado).
+    - **Registra entrada em `visits`** (exceto self-view) — UPSERT por par com atualização de `visited_at`. Enfileira notificação `visit` (stub Fase 9).
+    - **Respeita bloqueio**: se há `blocks` em qualquer sentido entre actor e target → `404 USER_NOT_FOUND` (não revela bloqueio).
+    - **Se `profile_completed_at IS NULL`** do target → `404` também (perfis incompletos não são públicos).
+
+### Fase 7.3 — Visits, block, report
+
+60. **Migration `visits_blocks_reports`** (`npm run migrate:make -- visits_blocks_reports`):
+    - **`visits`** — `visitor_id uuid FK CASCADE`, `visited_id uuid FK CASCADE`, `visited_at timestamptz default now()`, PK `(visitor_id, visited_id)`, `CHECK (visitor_id != visited_id)`. UPSERT em cada GET → registra "última visita" sem espalhar 100 rows.
+    - **`reports`** — `reporter_id uuid FK CASCADE`, `reported_id uuid FK CASCADE`, `reason varchar(32) default 'fake_account'`, `created_at`, PK `(reporter_id, reported_id)`.
+    - (Tabela `blocks` já existe da Fase 6.1.)
+61. **Endpoints**:
+    - **`POST /users/:id/report`** — UPSERT em `reports`. Idempotente. 204.
+    - **`POST /users/:id/block`** — em transação: INSERT em `blocks` + DELETE de `user_swipes` em ambos sentidos (manter swipe de alguém bloqueado é incoerente — UI não consegue ver/desfazer). 204.
+    - **`DELETE /users/:id/block`** — desbloqueia. **Não restaura swipes**.
+
+**Checkpoint Fase 7:**
+
+```bash
+# Pré-condição: dois users completos A e B (orientações compatíveis), sem swipes entre eles.
+
+# 1. A vê perfil de B
+curl -sk https://localhost/api/users/<B-id> -H "Authorization: Bearer $TOKEN_A" \
+  | jq '.relationship'
+# { iLiked: false, iDisliked: false, likedMe: false, matched: false, blocked: false }
+
+# 2. A dá like em B
+curl -sk -X POST https://localhost/api/users/<B-id>/like -H "Authorization: Bearer $TOKEN_A"
+# { "status": "liked" }
+
+# 3. B dá like em A → match mútuo
+curl -sk -X POST https://localhost/api/users/<A-id>/like -H "Authorization: Bearer $TOKEN_B"
+# { "status": "matched", "matchedAt": "..." }
+
+# 4. A vê o perfil de B de novo → relationship.matched = true
+curl -sk https://localhost/api/users/<B-id> -H "Authorization: Bearer $TOKEN_A" | jq '.relationship.matched'  # true
+
+# 5. A bloqueia B → GET /users/<B-id> devolve 404 + swipes mútuos sumiram do user_swipes
+curl -sk -X POST https://localhost/api/users/<B-id>/block -H "Authorization: Bearer $TOKEN_A"   # 204
+curl -sk -o /dev/null -w '%{http_code}\n' https://localhost/api/users/<B-id> -H "Authorization: Bearer $TOKEN_A"   # 404
+docker compose exec db psql -U matcha -d matcha_db -c \
+  "select count(*) from user_swipes where (swiper_id=<A-id> and target_id=<B-id>) or (swiper_id=<B-id> and target_id=<A-id>);"
+# 0
+```
 
 ---
 

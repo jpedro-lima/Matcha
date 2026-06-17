@@ -59,6 +59,7 @@ src/
     ├── user/                   ← GET/PATCH /users/me + PATCH /users/me/location
     ├── photo/                  ← presign + confirm + delete + list (acesso via signed URL)
     ├── tag/                    ← GET/PUT /users/me/tags + GET /tags?query=
+    ├── browse/                 ← GET /browse + GET /search (mesma engine, contracts distintos)
     └── health/
 ```
 
@@ -170,6 +171,50 @@ Endpoints in [modules/tag/tag.routes.ts](app/api/src/modules/tag/tag.routes.ts) 
 - **`tag.schemas.ts` faz double-validation**: `z.string().trim().transform(s => s.replace(/^#+/, '').toLowerCase()).pipe(z.string().regex(/^[a-z0-9-]+$/))`. O `.pipe(...)` valida o resultado **depois** do transform — se o usuário enviar `"hello world"`, o regex falha na fase 2.
 - **`req.query` em Express 5 é getter readonly** — `Object.assign` é silenciosamente ignorado. O middleware `validate` usa `Object.defineProperty(req, 'query', { value: parsed.data, ... })` pra entregar o valor transformado ao handler. Sem isso, autocomplete recebe `MU` em vez de `mu`.
 
+### Browse (Phase 6)
+
+Endpoints em [modules/browse/browse.routes.ts](app/api/src/modules/browse/browse.routes.ts):
+
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/browse` | `requireAuth` + query opcional. Default LIMIT 10, max 50. Sem critério = feed completo. |
+| GET | `/search` | Mesma engine, mesmo schema, mas exige ≥ 1 critério (`tags`/`minAge`/`maxAge`/`minFame`/`maxFame`/`maxDistanceKm`). Sem critério → `400 SEARCH_NO_CRITERIA`. |
+
+**Exclusões automáticas no `/browse` (sem precisar passar filtro):**
+1. Self
+2. `users.email_verified = false`
+3. `profiles.profile_completed_at IS NULL` (perfil incompleto — Fase 5.6)
+4. Qualquer linha em `user_swipes` com `swiper_id = me` (cobre like **e** dislike — sumiu uma vez, não volta)
+5. `blocks` em qualquer direção entre os pares
+6. `is_orientation_compatible(my_gender, my_orient, their_gender, their_orient) = false`
+
+**Score** (constantes no topo do `browse.service.ts`):
+```
+score = (W_DISTANCE / (distance_km + 1)) + W_TAGS * common_tags + W_FAME * fame_rating
+W_DISTANCE = 1, W_TAGS = 2, W_FAME = 0.5
+```
+
+`ORDER BY score DESC, fame_rating DESC, u.id ASC` — último é tiebreak determinístico.
+
+**Detalhes importantes:**
+
+- **Sem cursor pagination.** O feed renova naturalmente conforme o user swipea (cada swipe entra em `user_swipes` e some). Pra MVP não tem `page`/`offset`/`cursor`.
+- **Cast explícito em pesos floats no SQL.** `?::float` obrigatório quando o param é fracionário (e.g. `W_FAME=0.5`). Sem isso, `pg` infere integer e quebra com `invalid input syntax for type integer: "0.5"`. Ver `browse.service.ts` linha do `score`.
+- **SQL functions em [migrations/20260531152702_interactions_core.ts](app/api/src/database/migrations/20260531152702_interactions_core.ts):**
+  - `haversine_km(lat1, lon1, lat2, lon2) → float` — distância em km. Retorna `NULL` se qualquer coord for `NULL` (location manual, fallback).
+  - `is_attracted_to(my_gender, my_orient, their_gender) → bool` — "estou interessado em alguém deste gênero?". `orient` NULL = `'bi'`. `bi`/`other` = wildcard. `hetero` só vale pra binário m/f.
+  - `is_orientation_compatible(...)` = AND bidirecional de `is_attracted_to`.
+- **Filtro de distância respeita coord NULL.** Se o `me.latitude IS NULL` (location manual sem GPS), o filtro `maxDistanceKm` é **pulado** no service — `haversine_km` retornaria NULL e `NULL <= ?` é NULL → excluiria tudo. Score também usa `COALESCE(... , 0)` no termo de distância.
+
+### Schema de interações (Phase 6.1)
+
+| Tabela | PK composta | Pra que serve |
+|---|---|---|
+| `user_swipes` | `(swiper_id, target_id)` + `CHECK decision IN ('like','dislike')` + `CHECK swiper_id != target_id` | **Uma decisão por par**. Rewind (mudar de mente) = `UPDATE`, não dupla-row. Browse exclui via `NOT EXISTS WHERE swiper_id = me`. |
+| `blocks` | `(blocker_id, blocked_id)` + `CHECK blocker_id != blocked_id` | Unidirecional na tabela; browse aplica filtro em **ambos sentidos** via `OR`. |
+
+> **Match detection é Fase 7.1**, não 6. Em 6.1 só nasce o schema; significado social (VIEW `matches`, like com `{status: 'matched'}`, etc.) é F7.
+
 ### Profile completeness hook (Phase 5.6)
 
 `common/services/completeness.service.ts#recalculateCompleteness(userId, executor?)` é chamado por **todo mutator de sinal de perfil**:
@@ -259,7 +304,7 @@ Structure under `src/`:
 
 ## Specs and planning
 
-- [planning.md](planning.md) — phased rebuild of the API. Each phase has a checkpoint script that proves the work end-to-end. Current state: **Phases 4 (Auth) e 5 inteira (MinIO, profile, location, photos, tags, completude) complete**; próxima é Fase 6 (Browse/Search).
+- [planning.md](planning.md) — phased rebuild of the API. Each phase has a checkpoint script that proves the work end-to-end. Current state: **Phases 4 (Auth), 5 inteira (MinIO, profile, location, photos, tags, completude) e 6 (Browse/Search) complete**; próxima é Fase 7 (Profile view + ações sociais).
 - [DOC.md](DOC.md) — target API contract (routes, payloads, error envelope, schema).
 - [specifications.md](specifications.md) — product requirements (the 42 spec) the project must satisfy.
 
